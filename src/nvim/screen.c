@@ -6502,7 +6502,7 @@ static void win_redr_ruler(win_T *wp, bool always)
     }
   }
 
-  if (*p_ruf) {
+  if (*p_ruf && p_ch > 0) {
     int save_called_emsg = called_emsg;
     called_emsg = false;
     win_redr_custom(wp, false, true);
