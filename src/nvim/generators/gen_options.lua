@@ -34,7 +34,6 @@ local redraw_flags={
   current_window_only='P_RWINONLY',
   current_buffer='P_RBUF',
   all_windows='P_RALL',
-  everything='P_RCLR',
   curswant='P_CURSWANT',
   ui_option='P_UI_OPTION',
 }
@@ -115,7 +114,7 @@ local value_dumpers = {
 }
 
 local get_value = function(v)
-  return '(char_u *) ' .. value_dumpers[type(v)](v)
+  return '(char *) ' .. value_dumpers[type(v)](v)
 end
 
 local get_defaults = function(d,n)

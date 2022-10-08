@@ -96,7 +96,7 @@ describe('timers', function()
     nvim_async("command", "let g:val = 0 | let g:c = getchar()")
     retry(nil, nil, function()
       local val = eval("g:val")
-      ok(val >= 2, "expected >= 2, got: "..tostring(val))
+      ok(val >= 2, '>= 2', tostring(val))
       eq(0, eval("getchar(1)"))
     end)
     feed("c")
@@ -131,26 +131,15 @@ describe('timers', function()
     nvim_async("command", "call timer_start("..load_adjust(100)..", 'AddItem', {'repeat': -1})")
 
     screen:expect([[
-      ITEM 1                                  |
+      ^ITEM 1                                  |
       ITEM 2                                  |
       {1:~                                       }|
       {1:~                                       }|
       {1:~                                       }|
-      ^                                        |
+                                              |
     ]])
     nvim_async("command", "let g:cont = 1")
 
-    screen:expect([[
-      ITEM 1                                  |
-      ITEM 2                                  |
-      ITEM 3                                  |
-      {1:~                                       }|
-      {1:~                                       }|
-      ^                                        |
-    ]])
-
-    feed("3")
-    eq(51, eval("g:c2"))
     screen:expect([[
       ^ITEM 1                                  |
       ITEM 2                                  |
@@ -159,6 +148,17 @@ describe('timers', function()
       {1:~                                       }|
                                               |
     ]])
+
+    feed("3")
+    eq(51, eval("g:c2"))
+    screen:expect{grid=[[
+      ^ITEM 1                                  |
+      ITEM 2                                  |
+      ITEM 3                                  |
+      {1:~                                       }|
+      {1:~                                       }|
+                                              |
+    ]], unchanged=true}
   end)
 
   it('can be stopped', function()

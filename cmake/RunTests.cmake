@@ -2,7 +2,9 @@
 set(ENV{LC_ALL} "en_US.UTF-8")
 
 if(POLICY CMP0012)
-  # Handle CI=true, without dev warnings.
+  # Avoid policy warning due to CI=true. This is needed even if the main
+  # project has already set this policy as policy settings are reset when using
+  # the cmake script mode (-P).
   cmake_policy(SET CMP0012 NEW)
 endif()
 

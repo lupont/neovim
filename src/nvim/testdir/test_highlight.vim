@@ -722,7 +722,7 @@ func Test_1_highlight_Normalgroup_exists()
   elseif has('gui_gtk2') || has('gui_gnome') || has('gui_gtk3')
     " expect is DEFAULT_FONT of gui_gtk_x11.c
     call assert_match('hi Normal\s*font=Monospace 10', hlNormal)
-  elseif has('gui_motif') || has('gui_athena')
+  elseif has('gui_motif')
     " expect is DEFAULT_FONT of gui_x11.c
     call assert_match('hi Normal\s*font=7x13', hlNormal)
   elseif has('win32')
@@ -731,7 +731,8 @@ func Test_1_highlight_Normalgroup_exists()
   endif
 endfunc
 
-function Test_no_space_before_xxx()
+" Do this test last, sometimes restoring the columns doesn't work
+func Test_z_no_space_before_xxx()
   " Note: we need to create this highlight group in the test because it does not exist in Neovim
   execute('hi StatusLineTermNC ctermfg=green')
   let l:org_columns = &columns
@@ -739,7 +740,7 @@ function Test_no_space_before_xxx()
   let l:hi_StatusLineTermNC = join(split(execute('hi StatusLineTermNC')))
   call assert_match('StatusLineTermNC xxx', l:hi_StatusLineTermNC)
   let &columns = l:org_columns
-endfunction
+endfunc
 
 " Test for :highlight command errors
 func Test_highlight_cmd_errors()

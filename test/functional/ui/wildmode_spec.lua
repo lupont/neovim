@@ -184,11 +184,10 @@ describe("'wildmenu'", function()
     screen:expect_unchanged()
   end)
 
-  it('wildmode=list,full and display+=msgsep interaction #10092', function()
+  it('wildmode=list,full and messages interaction #10092', function()
     -- Need more than 5 rows, else tabline is covered and will be redrawn.
     screen:try_resize(25, 7)
 
-    command('set display+=msgsep')
     command('set wildmenu wildmode=list,full')
     command('set showtabline=2')
     feed(':set wildm<tab>')
@@ -215,44 +214,6 @@ describe("'wildmenu'", function()
     screen:expect([[
        [No Name]               |
       ^                         |
-      ~                        |
-      ~                        |
-      ~                        |
-      ~                        |
-                               |
-    ]])
-  end)
-
-  it('wildmode=list,full and display-=msgsep interaction', function()
-    -- Need more than 5 rows, else tabline is covered and will be redrawn.
-    screen:try_resize(25, 7)
-
-    command('set display-=msgsep')
-    command('set wildmenu wildmode=list,full')
-    feed(':set wildm<tab>')
-    screen:expect([[
-      ~                        |
-      ~                        |
-      ~                        |
-      ~                        |
-      :set wildm               |
-      wildmenu  wildmode       |
-      :set wildm^               |
-    ]])
-    feed('<tab>') -- trigger wildmode full
-    screen:expect([[
-      ~                        |
-      ~                        |
-      ~                        |
-      :set wildm               |
-      wildmenu  wildmode       |
-      wildmenu  wildmode       |
-      :set wildmenu^            |
-    ]])
-    feed('<Esc>')
-    screen:expect([[
-      ^                         |
-      ~                        |
       ~                        |
       ~                        |
       ~                        |
@@ -365,7 +326,6 @@ describe("'wildmenu'", function()
     screen:try_resize(25, 7)
 
     command('set laststatus=2')
-    command('set display+=msgsep')
     feed(':set wildm')
     feed('<c-d>')
     screen:expect([[
@@ -461,20 +421,20 @@ end)
 describe('command line completion', function()
   local screen
   before_each(function()
+    clear()
     screen = Screen.new(40, 5)
     screen:set_default_attr_ids({
      [1] = {bold = true, foreground = Screen.colors.Blue1},
      [2] = {foreground = Screen.colors.Grey0, background = Screen.colors.Yellow},
      [3] = {bold = true, reverse = true},
     })
+    screen:attach()
   end)
   after_each(function()
     os.remove('Xtest-functional-viml-compl-dir')
   end)
 
   it('lists directories with empty PATH', function()
-    clear()
-    screen:attach()
     local tmp = funcs.tempname()
     command('e '.. tmp)
     command('cd %:h')
@@ -491,8 +451,6 @@ describe('command line completion', function()
   end)
 
   it('completes env var names #9681', function()
-    clear()
-    screen:attach()
     command('let $XTEST_1 = "foo" | let $XTEST_2 = "bar"')
     command('set wildmenu wildmode=full')
     feed(':!echo $XTEST_<tab>')
@@ -519,6 +477,58 @@ describe('command line completion', function()
       {1:~                                       }|
       {2:XTEST_1AaあB}{3:  XTEST_2                   }|
       :!echo $XTEST_1AaあB^                    |
+    ]])
+  end)
+
+  it('does not leak memory with <S-Tab> with wildmenu and only one match #19874', function()
+    meths.set_option('wildmenu', true)
+    meths.set_option('wildmode', 'full')
+    meths.set_option('wildoptions', 'pum')
+
+    feed(':sign unpla<S-Tab>')
+    screen:expect([[
+                                              |
+      {1:~                                       }|
+      {1:~                                       }|
+      {1:~                                       }|
+      :sign unplace^                           |
+    ]])
+
+    feed('<Space>buff<Tab>')
+    screen:expect([[
+                                              |
+      {1:~                                       }|
+      {1:~                                       }|
+      {1:~                                       }|
+      :sign unplace buffer=^                   |
+    ]])
+  end)
+
+  it('does not show matches with <S-Tab> without wildmenu with wildmode=full', function()
+    meths.set_option('wildmenu', false)
+    meths.set_option('wildmode', 'full')
+
+    feed(':sign <S-Tab>')
+    screen:expect([[
+                                              |
+      {1:~                                       }|
+      {1:~                                       }|
+      {1:~                                       }|
+      :sign unplace^                           |
+    ]])
+  end)
+
+  it('shows matches with <S-Tab> without wildmenu with wildmode=list', function()
+    meths.set_option('wildmenu', false)
+    meths.set_option('wildmode', 'list')
+
+    feed(':sign <S-Tab>')
+    screen:expect([[
+      {3:                                        }|
+      :sign define                            |
+      define    list      undefine            |
+      jump      place     unplace             |
+      :sign unplace^                           |
     ]])
   end)
 end)

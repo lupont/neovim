@@ -114,6 +114,16 @@ func Test_put_p_indent_visual()
   bwipe!
 endfunc
 
+" Test for deleting all the contents of a buffer with a put
+func Test_put_visual_delete_all_lines()
+  new
+  call setline(1, ['one', 'two', 'three'])
+  let @r = ''
+  normal! VG"rgp
+  call assert_equal(1, line('$'))
+  close!
+endfunc
+
 func Test_gp_with_count_leaves_cursor_at_end()
   new
   call setline(1, '<---->')
@@ -211,6 +221,18 @@ func Test_put_empty_register()
   norm [Pi00ggv)s0
   sil! norm [P
   bwipe!
+endfunc
+
+" this was putting the end mark after the end of the line
+func Test_put_visual_mode()
+  edit! SomeNewBuffer
+  set selection=exclusive
+  exe "norm o\t"
+  m0
+  sil! norm pp
+
+  bwipe!
+  set selection&
 endfunc
 
 

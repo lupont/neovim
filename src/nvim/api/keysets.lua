@@ -2,6 +2,15 @@ return {
   context = {
     "types";
   };
+  set_decoration_provider = {
+    "on_start";
+    "on_buf";
+    "on_win";
+    "on_line";
+    "on_end";
+    "_on_hl_def";
+    "_on_spell_nav";
+  };
   set_extmark = {
     "id";
     "end_line";
@@ -28,6 +37,7 @@ return {
     "line_hl_group";
     "cursorline_hl_group";
     "conceal";
+    "spell";
     "ui_watched";
   };
   keymap = {
@@ -39,6 +49,7 @@ return {
     "unique";
     "callback";
     "desc";
+    "replace_keycodes";
   };
   get_commands = {
     "builtin";
@@ -95,15 +106,14 @@ return {
     "standout";
     "strikethrough";
     "underline";
-    "underlineline";
     "undercurl";
-    "underdot";
-    "underdash";
+    "underdouble";
+    "underdotted";
+    "underdashed";
     "italic";
     "reverse";
     "nocombine";
     "default";
-    "global";
     "cterm";
     "foreground"; "fg";
     "background"; "bg";
@@ -111,19 +121,19 @@ return {
     "ctermbg";
     "special"; "sp";
     "link";
+    "global_link";
     "fallback";
     "blend";
-    "temp";
   };
   highlight_cterm = {
     "bold";
     "standout";
     "strikethrough";
     "underline";
-    "underlineline";
     "undercurl";
-    "underdot";
-    "underdash";
+    "underdouble";
+    "underdotted";
+    "underdashed";
     "italic";
     "reverse";
     "nocombine";
@@ -181,11 +191,14 @@ return {
   cmd_mods = {
     "silent";
     "emsg_silent";
+    "unsilent";
+    "filter";
     "sandbox";
     "noautocmd";
     "browse";
     "confirm";
     "hide";
+    "horizontal";
     "keepalt";
     "keepjumps";
     "keepmarks";
@@ -196,6 +209,10 @@ return {
     "verbose";
     "vertical";
     "split";
+  };
+  cmd_mods_filter = {
+    "pattern";
+    "force";
   };
   cmd_opts = {
     "output";

@@ -1,6 +1,7 @@
 " Test for options
 
 source check.vim
+source view_util.vim
 
 func Test_whichwrap()
   set whichwrap=b,s
@@ -20,6 +21,21 @@ func Test_whichwrap()
 
   set whichwrap=h,h,h
   call assert_equal('h', &whichwrap)
+
+  " For compatibility with Vim 3.0 and before, number values are also
+  " supported for 'whichwrap'
+  set whichwrap=1
+  call assert_equal('b', &whichwrap)
+  set whichwrap=2
+  call assert_equal('s', &whichwrap)
+  set whichwrap=4
+  call assert_equal('h,l', &whichwrap)
+  set whichwrap=8
+  call assert_equal('<,>', &whichwrap)
+  set whichwrap=16
+  call assert_equal('[,]', &whichwrap)
+  set whichwrap=31
+  call assert_equal('b,s,h,l,<,>,[,]', &whichwrap)
 
   set whichwrap&
 endfunc
@@ -48,7 +64,9 @@ func Test_pastetoggle()
   let &pastetoggle = str
   call assert_equal(str, &pastetoggle)
   call assert_equal("\n  pastetoggle=" .. strtrans(str), execute('set pastetoggle?'))
+
   unlet str
+  set pastetoggle&
 endfunc
 
 func Test_wildchar()
@@ -231,12 +249,19 @@ func Test_complete()
   new
   call feedkeys("i\<C-N>\<Esc>", 'xt')
   bwipe!
+  call assert_fails('set complete=ix', 'E535:')
   set complete&
 endfun
 
 func Test_set_completion()
   call feedkeys(":set di\<C-A>\<C-B>\"\<CR>", 'tx')
   call assert_equal('"set dictionary diff diffexpr diffopt digraph directory display', @:)
+
+  call feedkeys(":setlocal di\<C-A>\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"setlocal dictionary diff diffexpr diffopt digraph directory display', @:)
+
+  call feedkeys(":setglobal di\<C-A>\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"setglobal dictionary diff diffexpr diffopt digraph directory display', @:)
 
   " Expand boolan options. When doing :set no<Tab>
   " vim displays the options names without "no" but completion uses "no...".
@@ -257,6 +282,15 @@ func Test_set_completion()
   call feedkeys(":set fileencodings:\<C-A>\<C-B>\"\<CR>", 'tx')
   call assert_equal('"set fileencodings:ucs-bom,utf-8,default,latin1', @:)
 
+  " Expand key codes.
+  " call feedkeys(":set <H\<C-A>\<C-B>\"\<CR>", 'tx')
+  " call assert_equal('"set <Help> <Home>', @:)
+
+  " Expand terminal options.
+  " call feedkeys(":set t_A\<C-A>\<C-B>\"\<CR>", 'tx')
+  " call assert_equal('"set t_AB t_AF t_AU t_AL', @:)
+  " call assert_fails('call feedkeys(":set <t_afoo>=\<C-A>\<CR>", "xt")', 'E474:')
+
   " Expand directories.
   call feedkeys(":set cdpath=./\<C-A>\<C-B>\"\<CR>", 'tx')
   call assert_match('./samples/ ', @:)
@@ -268,6 +302,7 @@ func Test_set_completion()
 
   call feedkeys(":set tags=./\\\\ dif\<C-A>\<C-B>\"\<CR>", 'tx')
   call assert_equal('"set tags=./\\ diff diffexpr diffopt', @:)
+
   set tags&
 
   " Expand values for 'filetype'
@@ -283,9 +318,10 @@ func Test_set_errors()
   call assert_fails('set regexpengine=3', 'E474:')
   call assert_fails('set history=10001', 'E474:')
   call assert_fails('set numberwidth=21', 'E474:')
-  call assert_fails('set colorcolumn=-a')
-  call assert_fails('set colorcolumn=a')
-  call assert_fails('set colorcolumn=1,')
+  call assert_fails('set colorcolumn=-a', 'E474:')
+  call assert_fails('set colorcolumn=a', 'E474:')
+  call assert_fails('set colorcolumn=1,', 'E474:')
+  call assert_fails('set colorcolumn=1;', 'E474:')
   call assert_fails('set cmdheight=-1', 'E487:')
   call assert_fails('set cmdwinheight=-1', 'E487:')
   if has('conceal')
@@ -299,6 +335,7 @@ func Test_set_errors()
   call assert_fails('set sidescroll=-1', 'E487:')
   call assert_fails('set tabstop=-1', 'E487:')
   call assert_fails('set tabstop=10000', 'E474:')
+  call assert_fails('let &tabstop = 10000', 'E474:')
   call assert_fails('set tabstop=5500000000', 'E474:')
   call assert_fails('set textwidth=-1', 'E487:')
   call assert_fails('set timeoutlen=-1', 'E487:')
@@ -314,6 +351,7 @@ func Test_set_errors()
   call assert_fails('set comments=a', 'E525:')
   call assert_fails('set foldmarker=x', 'E536:')
   call assert_fails('set commentstring=x', 'E537:')
+  call assert_fails('let &commentstring = "x"', 'E537:')
   call assert_fails('set complete=x', 'E539:')
   call assert_fails('set rulerformat=%-', 'E539:')
   call assert_fails('set rulerformat=%(', 'E542:')
@@ -336,14 +374,27 @@ func Test_set_errors()
     call assert_fails('set guicursor=i-ci,r-cr:h', 'E545:')
     call assert_fails('set guicursor=i-ci', 'E545:')
     call assert_fails('set guicursor=x', 'E545:')
+    call assert_fails('set guicursor=x:', 'E546:')
     call assert_fails('set guicursor=r-cr:horx', 'E548:')
     call assert_fails('set guicursor=r-cr:hor0', 'E549:')
+  endif
+  if has('mouseshape')
+    call assert_fails('se mouseshape=i-r:x', 'E547:')
   endif
   call assert_fails('set backupext=~ patchmode=~', 'E589:')
   call assert_fails('set winminheight=10 winheight=9', 'E591:')
   call assert_fails('set winminwidth=10 winwidth=9', 'E592:')
   call assert_fails("set showbreak=\x01", 'E595:')
   call assert_fails('set t_foo=', 'E846:')
+  call assert_fails('set tabstop??', 'E488:')
+  call assert_fails('set wrapscan!!', 'E488:')
+  call assert_fails('set tabstop&&', 'E488:')
+  call assert_fails('set wrapscan<<', 'E488:')
+  call assert_fails('set wrapscan=1', 'E474:')
+  call assert_fails('set autoindent@', 'E488:')
+  call assert_fails('set wildchar=<abc>', 'E474:')
+  call assert_fails('set cmdheight=1a', 'E521:')
+  call assert_fails('set invcmdheight', 'E474:')
   if has('python') || has('python3')
     call assert_fails('set pyxversion=6', 'E474:')
   endif
@@ -351,14 +402,23 @@ func Test_set_errors()
   call assert_fails('set sessionoptions=curdir,sesdir', 'E474:')
   call assert_fails('set foldmarker={{{,', 'E474:')
   call assert_fails('set sessionoptions=sesdir,curdir', 'E474:')
-  call assert_fails('set listchars=trail:· ambiwidth=double', 'E834:')
+  setlocal listchars=trail:·
+  call assert_fails('set ambiwidth=double', 'E834:')
+  setlocal listchars=trail:-
+  setglobal listchars=trail:·
+  call assert_fails('set ambiwidth=double', 'E834:')
   set listchars&
-  call assert_fails('set fillchars=stl:· ambiwidth=double', 'E835:')
+  setlocal fillchars=stl:·
+  call assert_fails('set ambiwidth=double', 'E835:')
+  setlocal fillchars=stl:-
+  setglobal fillchars=stl:·
+  call assert_fails('set ambiwidth=double', 'E835:')
   set fillchars&
   call assert_fails('set fileencoding=latin1,utf-8', 'E474:')
   set nomodifiable
   call assert_fails('set fileencoding=latin1', 'E21:')
   set modifiable&
+  " call assert_fails('set t_#-&', 'E522:')
 endfunc
 
 func CheckWasSet(name)
@@ -406,32 +466,37 @@ func Test_copy_context()
 endfunc
 
 func Test_set_ttytype()
-  " Nvim does not support 'ttytype'.
-  if !has('nvim') && !has('gui_running') && has('unix')
-    " Setting 'ttytype' used to cause a double-free when exiting vim and
-    " when vim is compiled with -DEXITFREE.
-    set ttytype=ansi
-    call assert_equal('ansi', &ttytype)
-    call assert_equal(&ttytype, &term)
-    set ttytype=xterm
-    call assert_equal('xterm', &ttytype)
-    call assert_equal(&ttytype, &term)
-    try
-      set ttytype=
-      call assert_report('set ttytype= did not fail')
-    catch /E529/
-    endtry
+  throw "Skipped: Nvim does not support 'ttytype'"
+  CheckUnix
+  CheckNotGui
 
-    " Some systems accept any terminal name and return dumb settings,
-    " check for failure of finding the entry and for missing 'cm' entry.
-    try
-      set ttytype=xxx
-      call assert_report('set ttytype=xxx did not fail')
-    catch /E522\|E437/
-    endtry
+  " Setting 'ttytype' used to cause a double-free when exiting vim and
+  " when vim is compiled with -DEXITFREE.
+  set ttytype=ansi
+  call assert_equal('ansi', &ttytype)
+  call assert_equal(&ttytype, &term)
+  set ttytype=xterm
+  call assert_equal('xterm', &ttytype)
+  call assert_equal(&ttytype, &term)
+  try
+    set ttytype=
+    call assert_report('set ttytype= did not fail')
+  catch /E529/
+  endtry
 
-    set ttytype&
-    call assert_equal(&ttytype, &term)
+  " Some systems accept any terminal name and return dumb settings,
+  " check for failure of finding the entry and for missing 'cm' entry.
+  try
+    set ttytype=xxx
+    call assert_report('set ttytype=xxx did not fail')
+  catch /E522\|E437/
+  endtry
+
+  set ttytype&
+  call assert_equal(&ttytype, &term)
+
+  if has('gui') && !has('gui_running')
+    call assert_fails('set term=gui', 'E531:')
   endif
 endfunc
 
@@ -454,9 +519,11 @@ func Test_set_one_column()
 endfunc
 
 func Test_set_values()
-  " The file is only generated when running "make test" in the src directory.
+  " opt_test.vim is generated from ../optiondefs.h using gen_opt_test.vim
   if filereadable('opt_test.vim')
     source opt_test.vim
+  else
+    throw 'Skipped: opt_test.vim does not exist'
   endif
 endfunc
 
@@ -623,7 +690,7 @@ func Test_copy_winopt()
   call assert_equal(4,&numberwidth)
   bw!
 
-  set nohidden
+  set hidden&
 endfunc
 
 func Test_shortmess_F()
@@ -729,7 +796,32 @@ func Test_buftype()
   call setline(1, ['L1'])
   set buftype=nowrite
   call assert_fails('write', 'E382:')
-  close!
+
+  " for val in ['', 'nofile', 'nowrite', 'acwrite', 'quickfix', 'help', 'terminal', 'prompt', 'popup']
+  for val in ['', 'nofile', 'nowrite', 'acwrite', 'quickfix', 'help', 'prompt']
+    exe 'set buftype=' .. val
+    call writefile(['something'], 'XBuftype')
+    call assert_fails('write XBuftype', 'E13:', 'with buftype=' .. val)
+  endfor
+
+  call delete('XBuftype')
+  bwipe!
+endfunc
+
+" Test for the 'shell' option
+func Test_shell()
+  throw 'Skipped: Nvim does not have :shell'
+  CheckUnix
+  let save_shell = &shell
+  set shell=
+  let caught_e91 = 0
+  try
+    shell
+  catch /E91:/
+    let caught_e91 = 1
+  endtry
+  call assert_equal(1, caught_e91)
+  let &shell = save_shell
 endfunc
 
 " Test for the 'shellquote' option
@@ -745,6 +837,150 @@ func Test_shellquote()
   call assert_match(': "#echo Hello#"', v)
 endfunc
 
+" Test for the 'rightleftcmd' option
+func Test_rightleftcmd()
+  CheckFeature rightleft
+  set rightleft
+
+  let g:l = []
+  func AddPos()
+    call add(g:l, screencol())
+    return ''
+  endfunc
+  cmap <expr> <F2> AddPos()
+
+  set rightleftcmd=
+  call feedkeys("/\<F2>abc\<Right>\<F2>\<Left>\<Left>\<F2>" ..
+        \ "\<Right>\<F2>\<Esc>", 'xt')
+  call assert_equal([2, 5, 3, 4], g:l)
+
+  let g:l = []
+  set rightleftcmd=search
+  call feedkeys("/\<F2>abc\<Left>\<F2>\<Right>\<Right>\<F2>" ..
+        \ "\<Left>\<F2>\<Esc>", 'xt')
+  call assert_equal([&co - 1, &co - 4, &co - 2, &co - 3], g:l)
+
+  cunmap <F2>
+  unlet g:l
+  set rightleftcmd&
+  set rightleft&
+endfunc
+
+" Test for the 'debug' option
+func Test_debug_option()
+  " redraw to avoid matching previous messages
+  redraw
+  set debug=beep
+  exe "normal \<C-c>"
+  call assert_equal('Beep!', Screenline(&lines))
+  call assert_equal('line    4:', Screenline(&lines - 1))
+  " only match the final colon in the line that shows the source
+  call assert_match(':$', Screenline(&lines - 2))
+  set debug&
+endfunc
+
+" Test for the default CDPATH option
+func Test_opt_default_cdpath()
+  CheckFeature file_in_path
+  let after =<< trim [CODE]
+    call assert_equal(',/path/to/dir1,/path/to/dir2', &cdpath)
+    call writefile(v:errors, 'Xtestout')
+    qall
+  [CODE]
+  if has('unix')
+    let $CDPATH='/path/to/dir1:/path/to/dir2'
+  else
+    let $CDPATH='/path/to/dir1;/path/to/dir2'
+  endif
+  if RunVim([], after, '')
+    call assert_equal([], readfile('Xtestout'))
+    call delete('Xtestout')
+  endif
+endfunc
+
+" Test for setting keycodes using set
+func Test_opt_set_keycode()
+  call assert_fails('set <t_k1=l', 'E474:')
+  call assert_fails('set <Home=l', 'E474:')
+  set <t_k9>=abcd
+  " call assert_equal('abcd', &t_k9)
+  set <t_k9>&
+  set <F9>=xyz
+  " call assert_equal('xyz', &t_k9)
+  set <t_k9>&
+endfunc
+
+" Test for changing options in a sandbox
+func Test_opt_sandbox()
+  for opt in ['backupdir', 'cdpath', 'exrc']
+    call assert_fails('sandbox set ' .. opt .. '?', 'E48:')
+  endfor
+endfunc
+
+" Test for setting an option with local value to global value
+func Test_opt_local_to_global()
+  setglobal equalprg=gprg
+  setlocal equalprg=lprg
+  call assert_equal('gprg', &g:equalprg)
+  call assert_equal('lprg', &l:equalprg)
+  call assert_equal('lprg', &equalprg)
+  set equalprg<
+  call assert_equal('', &l:equalprg)
+  call assert_equal('gprg', &equalprg)
+  setglobal equalprg=gnewprg
+  setlocal equalprg=lnewprg
+  setlocal equalprg<
+  call assert_equal('gnewprg', &l:equalprg)
+  call assert_equal('gnewprg', &equalprg)
+  set equalprg&
+
+  " Test for setting the global/local value of a boolean option
+  setglobal autoread
+  setlocal noautoread
+  call assert_false(&autoread)
+  set autoread<
+  call assert_true(&autoread)
+  setglobal noautoread
+  setlocal autoread
+  setlocal autoread<
+  call assert_false(&autoread)
+  set autoread&
+endfunc
+
+func Test_set_in_sandbox()
+  " Some boolean options cannot be set in sandbox, some can.
+  call assert_fails('sandbox set modelineexpr', 'E48:')
+  sandbox set number
+  call assert_true(&number)
+  set number&
+
+  " Some boolean options cannot be set in sandbox, some can.
+  if has('python') || has('python3')
+    call assert_fails('sandbox set pyxversion=3', 'E48:')
+  endif
+  sandbox set tabstop=4
+  call assert_equal(4, &tabstop)
+  set tabstop&
+
+  " Some string options cannot be set in sandbox, some can.
+  call assert_fails('sandbox set backupdir=/tmp', 'E48:')
+  sandbox set filetype=perl
+  call assert_equal('perl', &filetype)
+  set filetype&
+endfunc
+
+" Test for incrementing, decrementing and multiplying a number option value
+func Test_opt_num_op()
+  set shiftwidth=4
+  set sw+=2
+  call assert_equal(6, &sw)
+  set sw-=2
+  call assert_equal(4, &sw)
+  set sw^=2
+  call assert_equal(8, &sw)
+  set shiftwidth&
+endfunc
+
 " Test for setting option values using v:false and v:true
 func Test_opt_boolean()
   set number&
@@ -757,6 +993,47 @@ func Test_opt_boolean()
   let &nu = v:false
   call assert_equal(0, &nu)
   set number&
+endfunc
+
+" Test for the 'window' option
+func Test_window_opt()
+  " Needs only one open widow
+  %bw!
+  call setline(1, range(1, 8))
+  set window=5
+  exe "normal \<C-F>"
+  call assert_equal(4, line('w0'))
+  exe "normal \<C-F>"
+  call assert_equal(7, line('w0'))
+  exe "normal \<C-F>"
+  call assert_equal(8, line('w0'))
+  exe "normal \<C-B>"
+  call assert_equal(5, line('w0'))
+  exe "normal \<C-B>"
+  call assert_equal(2, line('w0'))
+  exe "normal \<C-B>"
+  call assert_equal(1, line('w0'))
+  set window=1
+  exe "normal gg\<C-F>"
+  call assert_equal(2, line('w0'))
+  exe "normal \<C-F>"
+  call assert_equal(3, line('w0'))
+  exe "normal \<C-B>"
+  call assert_equal(2, line('w0'))
+  exe "normal \<C-B>"
+  call assert_equal(1, line('w0'))
+  enew!
+  set window&
+endfunc
+
+" Test for the 'winminheight' option
+func Test_opt_winminheight()
+  only!
+  let &winheight = &lines + 4
+  call assert_fails('let &winminheight = &lines + 2', 'E36:')
+  call assert_true(&winminheight <= &lines)
+  set winminheight&
+  set winheight&
 endfunc
 
 func Test_opt_winminheight_term()
@@ -802,6 +1079,16 @@ func Test_opt_winminheight_term_tabs()
   call delete('Xwinminheight')
 endfunc
 
+" Test for the 'winminwidth' option
+func Test_opt_winminwidth()
+  only!
+  let &winwidth = &columns + 4
+  call assert_fails('let &winminwidth = &columns + 2', 'E36:')
+  call assert_true(&winminwidth <= &columns)
+  set winminwidth&
+  set winwidth&
+endfunc
+
 " Test for setting option value containing spaces with isfname+=32
 func Test_isfname_with_options()
   set isfname+=32
@@ -828,6 +1115,64 @@ func Test_opt_reset_scroll()
 
   " clean up
   call delete('Xscroll')
+endfunc
+
+" Test for setting an option to a Vi or Vim default
+func Test_opt_default()
+  throw 'Skipped: Nvim has different defaults'
+  set formatoptions&vi
+  call assert_equal('vt', &formatoptions)
+  set formatoptions&vim
+  call assert_equal('tcq', &formatoptions)
+endfunc
+
+" Test for the 'cmdheight' option
+func Test_cmdheight()
+  %bw!
+  let ht = &lines
+  set cmdheight=9999
+  call assert_equal(1, winheight(0))
+  call assert_equal(ht - 1, &cmdheight)
+  set cmdheight&
+endfunc
+
+" To specify a control character as a option value, '^' can be used
+func Test_opt_control_char()
+  set wildchar=^v
+  call assert_equal("\<C-V>", nr2char(&wildchar))
+  set wildcharm=^r
+  call assert_equal("\<C-R>", nr2char(&wildcharm))
+  " Bug: This doesn't work for the 'cedit' and 'termwinkey' options
+  set wildchar& wildcharm&
+endfunc
+
+" Test for the 'errorbells' option
+func Test_opt_errorbells()
+  set errorbells
+  call assert_beeps('s/a1b2/x1y2/')
+  set noerrorbells
+endfunc
+
+func Test_opt_scrolljump()
+  help
+  resize 10
+
+  " Test with positive 'scrolljump'.
+  set scrolljump=2
+  norm! Lj
+  call assert_equal({'lnum':11, 'leftcol':0, 'col':0, 'topfill':0,
+        \            'topline':3, 'coladd':0, 'skipcol':0, 'curswant':0},
+        \           winsaveview())
+
+  " Test with negative 'scrolljump' (percentage of window height).
+  set scrolljump=-40
+  norm! ggLj
+  call assert_equal({'lnum':11, 'leftcol':0, 'col':0, 'topfill':0,
+         \            'topline':5, 'coladd':0, 'skipcol':0, 'curswant':0},
+         \           winsaveview())
+
+  set scrolljump&
+  bw
 endfunc
 
 " Test for the 'cdhome' option
@@ -863,5 +1208,19 @@ func Test_switchbuf_reset()
   call assert_equal(2, winnr('$'))
   only!
 endfunc
+
+" :set empty string for global 'keywordprg' falls back to ":help"
+func Test_keywordprg_empty()
+  let k = &keywordprg
+  set keywordprg=man
+  call assert_equal('man', &keywordprg)
+  set keywordprg=
+  call assert_equal(':help', &keywordprg)
+  set keywordprg=man
+  call assert_equal('man', &keywordprg)
+  call assert_equal("\n  keywordprg=:help", execute('set kp= kp?'))
+  let &keywordprg = k
+endfunc
+
 
 " vim: shiftwidth=2 sts=2 expandtab

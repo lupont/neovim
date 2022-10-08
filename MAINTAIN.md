@@ -57,13 +57,12 @@ has a major bug:
 
 The neovim repository includes a backport [github action](https://github.com/zeebe-io/backport-action).
 In order to trigger the action, a PR must be labeled with a label matching the
-form `backport release-0.X`. Note, the PR must have a description in the issue body,
-or the backport will fail.
+form `backport release-0.X`.
 
 Third-party dependencies
 --------------
 
-These "bundled" dependencies can be updated by bumping their versions in `third-party/CMakeLists.txt`:
+These "bundled" dependencies can be updated by bumping their versions in `cmake.deps/CMakeLists.txt`:
   - [Lua](https://www.lua.org/download.html)
   - [LuaJIT](https://github.com/LuaJIT/LuaJIT)
   - [Luv](https://github.com/luvit/luv)

@@ -4,15 +4,15 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <uv.h>
-#ifndef WIN32
+#ifndef MSWIN
 # include <signal.h>  // for sigset_t
 #endif
 
 #include "nvim/ascii.h"
+#include "nvim/autocmd.h"
 #include "nvim/eval.h"
 #include "nvim/event/loop.h"
 #include "nvim/event/signal.h"
-#include "nvim/fileio.h"
 #include "nvim/globals.h"
 #include "nvim/log.h"
 #include "nvim/main.h"
@@ -34,7 +34,7 @@ static bool rejecting_deadly;
 
 void signal_init(void)
 {
-#ifndef WIN32
+#ifndef MSWIN
   // Ensure a clean slate by unblocking all signals. For example, if SIGCHLD is
   // blocked, libuv may hang after spawning a subprocess on Linux. #5230
   sigset_t mask;
@@ -165,8 +165,7 @@ static char *signal_name(int signum)
 // This function handles deadly signals.
 // It tries to preserve any swap files and exit properly.
 // (partly from Elvis).
-// NOTE: Avoid unsafe functions, such as allocating memory, they can result in
-// a deadlock.
+// NOTE: this is scheduled on the event loop, not called directly from a signal handler.
 static void deadly_signal(int signum)
   FUNC_ATTR_NORETURN
 {

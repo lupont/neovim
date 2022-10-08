@@ -75,8 +75,10 @@ add_custom_command(OUTPUT ${GENERATED_HELP_TAGS}
 )
 
 
+# TODO: This doesn't work. wait for "nvim -l" to land?
 add_custom_target(doc_html
-  COMMAND make html
+  COMMAND "${PROJECT_BINARY_DIR}/bin/nvim"
+    -V1 -es --clean -c "lua require('scripts.gen_help_html').gen('./build/runtime/doc', './build/doc_html', nil, 'todo_commit_id')" -c "0cq"
   DEPENDS
     ${GENERATED_HELP_TAGS}
   WORKING_DIRECTORY "${GENERATED_RUNTIME_DIR}/doc"
@@ -117,16 +119,16 @@ endif()
 globrecurse_wrapper(RUNTIME_PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR} *.awk *.sh *.bat)
 
 foreach(PROG ${RUNTIME_PROGRAMS})
-  get_filename_component(BASEDIR ${PROG} PATH)
+  get_filename_component(BASEDIR ${PROG} DIRECTORY)
   install_helper(PROGRAMS ${PROG}
                  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/nvim/runtime/${BASEDIR})
 endforeach()
 
 globrecurse_wrapper(RUNTIME_FILES ${CMAKE_CURRENT_SOURCE_DIR}
-  *.vim *.lua *.dict *.py *.rb *.ps *.spl *.tutor *.tutor.json)
+  *.vim *.lua *.scm *.dict *.py *.rb *.ps *.spl *.tutor *.tutor.json)
 
 foreach(F ${RUNTIME_FILES})
-  get_filename_component(BASEDIR ${F} PATH)
+  get_filename_component(BASEDIR ${F} DIRECTORY)
   install_helper(FILES ${F}
                  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/nvim/runtime/${BASEDIR})
 endforeach()

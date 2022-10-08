@@ -1,5 +1,9 @@
 " Tests for the substitute (:s) command
 
+source shared.vim
+source check.vim
+source screendump.vim
+
 func Test_multiline_subst()
   enew!
   call append(0, ["1 aa",
@@ -140,7 +144,7 @@ func Test_substitute_repeat()
   " This caused an invalid memory access.
   split Xfile
   s/^/x
-  call feedkeys("gQsc\<CR>y", 'tx')
+  call feedkeys("Qsc\<CR>y", 'tx')
   bwipe!
 endfunc
 
@@ -292,7 +296,7 @@ endfunc
 
 " Test for *:s%* on :substitute.
 func Test_sub_cmd_6()
-  throw "skipped: Nvim removed POSIX-related 'cpoptions' flags"
+  throw 'Skipped: Nvim does not support cpoptions flag "/"'
   set magic&
   set cpo+=/
 
@@ -635,12 +639,16 @@ endfunc
 func SubReplacer(text, submatches)
   return a:text .. a:submatches[0] .. a:text
 endfunc
+func SubReplacerVar(text, ...)
+  return a:text .. a:1[0] .. a:text
+endfunc
 func SubReplacer20(t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, submatches)
   return a:t3 .. a:submatches[0] .. a:t11
 endfunc
 
 func Test_substitute_partial()
   call assert_equal('1foo2foo3', substitute('123', '2', function('SubReplacer', ['foo']), 'g'))
+  call assert_equal('1foo2foo3', substitute('123', '2', function('SubReplacerVar', ['foo']), 'g'))
 
   " 19 arguments plus one is just OK
   let Replacer = function('SubReplacer20', repeat(['foo'], 19))
@@ -664,6 +672,21 @@ func Test_sub_cmd_9()
 
   delfunc Foo
   bw!
+endfunc
+
+func Test_sub_highlight_zero_match()
+  CheckRunVimInTerminal
+
+  let lines =<< trim END
+    call setline(1, ['one', 'two', 'three'])
+  END
+  call writefile(lines, 'XscriptSubHighlight', 'D')
+  let buf = RunVimInTerminal('-S XscriptSubHighlight', #{rows: 8, cols: 60})
+  call term_sendkeys(buf, ":%s/^/   /c\<CR>")
+  call VerifyScreenDump(buf, 'Test_sub_highlight_zer_match_1', {})
+
+  call term_sendkeys(buf, "\<Esc>")
+  call StopVimInTerminal(buf)
 endfunc
 
 func Test_nocatch_sub_failure_handling()
@@ -806,6 +829,41 @@ func Test_sub_expand_text()
   close!
 endfunc
 
+" Test for command failures when the last substitute pattern is not set.
+func Test_sub_with_no_last_pat()
+  let lines =<< trim [SCRIPT]
+    call assert_fails('~', 'E33:')
+    call assert_fails('s//abc/g', 'E476:')
+    call assert_fails('s\/bar', 'E476:')
+    call assert_fails('s\&bar&', 'E476:')
+    call writefile(v:errors, 'Xresult')
+    qall!
+  [SCRIPT]
+  call writefile(lines, 'Xscript')
+  if RunVim([], [], '--clean -S Xscript')
+    call assert_equal([], readfile('Xresult'))
+  endif
+
+  " Nvim does not support cpoptions flag "/"'
+  " let lines =<< trim [SCRIPT]
+  "   set cpo+=/
+  "   call assert_fails('s/abc/%/', 'E33:')
+  "   call writefile(v:errors, 'Xresult')
+  "   qall!
+  " [SCRIPT]
+  " call writefile(lines, 'Xscript')
+  " if RunVim([], [], '--clean -S Xscript')
+  "   call assert_equal([], readfile('Xresult'))
+  " endif
+
+  call delete('Xscript')
+  call delete('Xresult')
+endfunc
+
+func Test_substitute()
+  call assert_equal('a１a２a３a', substitute('１２３', '\zs', 'a', 'g'))
+endfunc
+
 func Test_submatch_list_concatenate()
   let pat = 'A\(.\)'
   let Rep = {-> string([submatch(0, 1)] + [[submatch(1)]])}
@@ -819,6 +877,44 @@ func Test_substitute_skipped_range()
   endif
   call assert_equal([0, 1, 1, 0, 1], getcurpos())
   bwipe!
+endfunc
+
+" Test using the 'gdefault' option (when on, flag 'g' is default on).
+func Test_substitute_gdefault()
+  new
+
+  " First check without 'gdefault'
+  call setline(1, 'foo bar foo')
+  s/foo/FOO/
+  call assert_equal('FOO bar foo', getline(1))
+  call setline(1, 'foo bar foo')
+  s/foo/FOO/g
+  call assert_equal('FOO bar FOO', getline(1))
+  call setline(1, 'foo bar foo')
+  s/foo/FOO/gg
+  call assert_equal('FOO bar foo', getline(1))
+
+  " Then check with 'gdefault'
+  set gdefault
+  call setline(1, 'foo bar foo')
+  s/foo/FOO/
+  call assert_equal('FOO bar FOO', getline(1))
+  call setline(1, 'foo bar foo')
+  s/foo/FOO/g
+  call assert_equal('FOO bar foo', getline(1))
+  call setline(1, 'foo bar foo')
+  s/foo/FOO/gg
+  call assert_equal('FOO bar FOO', getline(1))
+
+  " Setting 'compatible' should reset 'gdefault'
+  call assert_equal(1, &gdefault)
+  " set compatible
+  set nogdefault
+  call assert_equal(0, &gdefault)
+  set nocompatible
+  call assert_equal(0, &gdefault)
+
+  bw!
 endfunc
 
 " This was using "old_sub" after it was freed.
@@ -849,6 +945,54 @@ func Test_sub_change_window()
   bwipe!
   bwipe!
   delfunc Repl
+endfunc
+
+" This was undoign a change in between computing the length and using it.
+func Do_Test_sub_undo_change()
+  new
+  norm o0000000000000000000000000000000000000000000000000000
+  silent! s/\%')/\=Repl()
+  bwipe!
+endfunc
+
+func Test_sub_undo_change()
+  func Repl()
+    silent! norm g-
+  endfunc
+  call Do_Test_sub_undo_change()
+
+  func! Repl()
+    silent earlier
+  endfunc
+  call Do_Test_sub_undo_change()
+
+  delfunc Repl
+endfunc
+
+" This was opening a command line window from the expression
+func Test_sub_open_cmdline_win()
+  " the error only happens in a very specific setup, run a new Vim instance to
+  " get a clean starting point.
+  let lines =<< trim [SCRIPT]
+    set vb t_vb=
+    norm o0000000000000000000000000000000000000000000000000000
+    func Replace()
+      norm q/
+    endfunc
+    s/\%')/\=Replace()
+    redir >Xresult
+    messages
+    redir END
+    qall!
+  [SCRIPT]
+  call writefile(lines, 'Xscript')
+  if RunVim([], [], '-u NONE -S Xscript')
+    call assert_match('E565: Not allowed to change text or change window',
+          \ readfile('Xresult')->join('XX'))
+  endif
+
+  call delete('Xscript')
+  call delete('Xresult')
 endfunc
 
 " Test for the 2-letter and 3-letter :substitute commands

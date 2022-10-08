@@ -43,7 +43,7 @@ cursorentry_T shape_table[SHAPE_IDX_COUNT] =
 };
 
 /// Converts cursor_shapes into an Array of Dictionaries
-/// @param arena initialized arena where memory will be alocated
+/// @param arena initialized arena where memory will be allocated
 ///
 /// @return Array of the form {[ "cursor_shape": ... ], ...}
 Array mode_style_array(Arena *arena)
@@ -120,7 +120,7 @@ char *parse_shape_opt(int what)
       }
     }
     // Repeat for all comma separated parts.
-    char *modep = (char *)p_guicursor;
+    char *modep = p_guicursor;
     while (modep != NULL && *modep != NUL) {
       colonp = vim_strchr(modep, ':');
       commap = vim_strchr(modep, ',');
@@ -189,7 +189,7 @@ char *parse_shape_opt(int what)
               if (!ascii_isdigit(*p)) {
                 return N_("E548: digit expected");
               }
-              int n = getdigits_int((char_u **)&p, false, 0);
+              int n = getdigits_int(&p, false, 0);
               if (len == 3) {               // "ver" or "hor"
                 if (n == 0) {
                   return N_("E549: Illegal percentage");
@@ -220,7 +220,7 @@ char *parse_shape_opt(int what)
               endp = vim_strchr(p, '-');
               if (commap == NULL) {                       // last part
                 if (endp == NULL) {
-                  endp = p + STRLEN(p);                  // find end of part
+                  endp = p + strlen(p);                  // find end of part
                 }
               } else if (endp > commap || endp == NULL) {
                 endp = commap;

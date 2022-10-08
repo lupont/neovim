@@ -66,7 +66,6 @@ local function common_setup(screen, inccommand, text)
     command("syntax on")
     command("set nohlsearch")
     command("hi Substitute guifg=red guibg=yellow")
-    command("set display-=msgsep")
     screen:attach()
     screen:set_default_attr_ids({
       [1]  = {foreground = Screen.colors.Fuchsia},
@@ -142,11 +141,11 @@ describe(":substitute, 'inccommand' preserves", function()
     feed_command("ls")
 
     screen:expect([[
+      BAC                           |
       {15:~                             }|
       {15:~                             }|
       {15:~                             }|
-      {15:~                             }|
-      {15:~                             }|
+      {11:                              }|
       :ls                           |
         1 %a + "[No Name]"          |
                 line 1              |
@@ -1191,6 +1190,8 @@ describe(":substitute, inccommand=split", function()
   end)
 
   it("deactivates if 'redrawtime' is exceeded #5602", function()
+    -- prevent redraws from 'incsearch'
+    meths.set_option('incsearch', false)
     -- Assert that 'inccommand' is ENABLED initially.
     eq("split", eval("&inccommand"))
     -- Set 'redrawtime' to minimal value, to ensure timeout is triggered.
@@ -1469,14 +1470,14 @@ describe("inccommand=nosplit", function()
     -- non-modifier prefix
     feed(':silent tabedit %s/tw/to')
     screen:expect([[
+      Inc substitution on |
       two lines           |
       Inc substitution on |
       two lines           |
                           |
       {15:~                   }|
       {15:~                   }|
-      {15:~                   }|
-      {15:~                   }|
+      {11:                    }|
       :silent tabedit %s/t|
       w/to^                |
     ]])
@@ -1778,11 +1779,11 @@ describe("'inccommand' and :cnoremap", function()
       feed_command("cnoremap <expr> x execute('bwipeout!')[-1].'x'")
 
       feed(":%s/tw/tox<enter>")
-      screen:expect{any=[[{14:^E523:]]}
+      screen:expect{any=[[{14:^E565:]]}
       feed('<c-c>')
 
       -- error thrown b/c of the mapping
-      neq(nil, eval('v:errmsg'):find('^E523:'))
+      neq(nil, eval('v:errmsg'):find('^E565:'))
       expect([[
       Inc substitution on
       toxo lines
@@ -2656,6 +2657,7 @@ describe(":substitute", function()
 
     feed("\\rѫ ab   \\rXXXX")
     screen:expect([[
+      7 8 9                         |
       K L M                         |
       {12:JLKR £}                        |
       {12:ѫ ab   }                       |
@@ -2667,8 +2669,7 @@ describe(":substitute", function()
       {12:ѫ ab   }                       |
       {11:[No Name] [+]                 }|
       | 7| {12:JLKR £}                   |
-      | 8|{12: ѫ ab   }                  |
-      {10:[Preview]                     }|
+      {11:                              }|
       :%s/[a-z]/JLKR £\rѫ ab   \rXXX|
       X^                             |
     ]])
@@ -2973,6 +2974,59 @@ it(':substitute with inccommand, does not crash if range contains invalid marks'
   ]])
 end)
 
+it(':substitute with inccommand, no unnecessary redraw if preview is not shown', function()
+  local screen = Screen.new(60, 6)
+  clear()
+  common_setup(screen, 'split', 'test')
+  feed(':ls<CR>')
+  screen:expect([[
+    test                                                        |
+    {15:~                                                           }|
+    {11:                                                            }|
+    :ls                                                         |
+      1 %a + "[No Name]"                    line 1              |
+    {13:Press ENTER or type command to continue}^                     |
+  ]])
+  feed(':s')
+  -- no unnecessary redraw, so messages are still shown
+  screen:expect([[
+    test                                                        |
+    {15:~                                                           }|
+    {11:                                                            }|
+    :ls                                                         |
+      1 %a + "[No Name]"                    line 1              |
+    :s^                                                          |
+  ]])
+  feed('o')
+  screen:expect([[
+    test                                                        |
+    {15:~                                                           }|
+    {11:                                                            }|
+    :ls                                                         |
+      1 %a + "[No Name]"                    line 1              |
+    :so^                                                         |
+  ]])
+  feed('<BS>')
+  screen:expect([[
+    test                                                        |
+    {15:~                                                           }|
+    {11:                                                            }|
+    :ls                                                         |
+      1 %a + "[No Name]"                    line 1              |
+    :s^                                                          |
+  ]])
+  feed('/test')
+  -- now inccommand is shown, so screen is redrawn
+  screen:expect([[
+    {12:test}                                                        |
+    {15:~                                                           }|
+    {15:~                                                           }|
+    {15:~                                                           }|
+    {15:~                                                           }|
+    :s/test^                                                     |
+  ]])
+end)
+
 it(":substitute doesn't crash with inccommand, if undo is empty #12932", function()
   local screen = Screen.new(10,5)
   clear()
@@ -2993,6 +3047,43 @@ it(":substitute doesn't crash with inccommand, if undo is empty #12932", functio
   assert_alive()
 end)
 
+it(':substitute with inccommand works properly if undo is not synced #20029', function()
+  local screen = Screen.new(30, 6)
+  clear()
+  common_setup(screen, 'nosplit', 'foo\nbar\nbaz')
+  meths.set_keymap('x', '<F2>', '<Esc>`<Oaaaaa asdf<Esc>`>obbbbb asdf<Esc>V`<k:s/asdf/', {})
+  feed('gg0<C-V>lljj<F2>')
+  screen:expect([[
+    aaaaa                         |
+    foo                           |
+    bar                           |
+    baz                           |
+    bbbbb                         |
+    :'<,'>s/asdf/^                 |
+  ]])
+  feed('hjkl')
+  screen:expect([[
+    aaaaa {12:hjkl}                    |
+    foo                           |
+    bar                           |
+    baz                           |
+    bbbbb {12:hjkl}                    |
+    :'<,'>s/asdf/hjkl^             |
+  ]])
+  feed('<CR>')
+  expect([[
+    aaaaa hjkl
+    foo
+    bar
+    baz
+    bbbbb hjkl]])
+  feed('u')
+  expect([[
+    foo
+    bar
+    baz]])
+end)
+
 it('long :%s/ with inccommand does not collapse cmdline', function()
   local screen = Screen.new(10,5)
   clear()
@@ -3001,10 +3092,23 @@ it('long :%s/ with inccommand does not collapse cmdline', function()
   feed(':%s/AAAAAAA', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A',
     'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A')
   screen:expect([[
-    {15:~           }|
-    {15:~           }|
+                |
+    {11:            }|
     :%s/AAAAAAAA|
     AAAAAAAAAAAA|
     AAAAAAA^     |
   ]])
+end)
+
+it("with 'inccommand' typing :filter doesn't segfault or leak memory #19057", function()
+  clear()
+  common_setup(nil, 'nosplit')
+  feed(':filter s')
+  assert_alive()
+  feed(' ')
+  assert_alive()
+  feed('h')
+  assert_alive()
+  feed('i')
+  assert_alive()
 end)

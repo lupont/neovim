@@ -301,6 +301,9 @@ func Test_replace_on_tab()
   call append(0, "'r'\t")
   normal gg^5lrxAy
   call assert_equal("'r'  x  y", getline(1))
+  call setline(1, 'aaaaaaaaaaaa')
+  exe "normal! gg2lgR\<Tab>"
+  call assert_equal("aa\taaaa", getline(1))
   bwipe!
   set virtualedit=
 endfunc
@@ -477,5 +480,54 @@ func Test_global_local_virtualedit()
   setlocal virtualedit&
   set virtualedit&
 endfunc
+
+func Test_virtualedit_mouse()
+  let save_mouse = &mouse
+  set mouse=a
+  set virtualedit=all
+  new
+
+  call setline(1, ["text\tword"])
+  redraw
+  call Ntest_setmouse(1, 4)
+  call feedkeys("\<LeftMouse>", "xt")
+  call assert_equal([0, 1, 4, 0, 4], getcurpos())
+  call Ntest_setmouse(1, 5)
+  call feedkeys("\<LeftMouse>", "xt")
+  call assert_equal([0, 1, 5, 0, 5], getcurpos())
+  call Ntest_setmouse(1, 6)
+  call feedkeys("\<LeftMouse>", "xt")
+  call assert_equal([0, 1, 5, 1, 6], getcurpos())
+  call Ntest_setmouse(1, 7)
+  call feedkeys("\<LeftMouse>", "xt")
+  call assert_equal([0, 1, 5, 2, 7], getcurpos())
+  call Ntest_setmouse(1, 8)
+  call feedkeys("\<LeftMouse>", "xt")
+  call assert_equal([0, 1, 5, 3, 8], getcurpos())
+  call Ntest_setmouse(1, 9)
+  call feedkeys("\<LeftMouse>", "xt")
+  call assert_equal([0, 1, 6, 0, 9], getcurpos())
+  call Ntest_setmouse(1, 15)
+  call feedkeys("\<LeftMouse>", "xt")
+  call assert_equal([0, 1, 10, 2, 15], getcurpos())
+
+  bwipe!
+  let &mouse = save_mouse
+  set virtualedit&
+endfunc
+
+" this was replacing the NUL at the end of the line 
+func Test_virtualedit_replace_after_tab()
+  new
+  s/\v/	0
+  set ve=all
+  let @" = ''
+  sil! norm vPvr0
+  
+  call assert_equal("\t0", getline(1))
+  set ve&
+  bwipe!
+endfunc
+
 
 " vim: shiftwidth=2 sts=2 expandtab

@@ -3,19 +3,19 @@
 
 #include <assert.h>
 
+#include "klib/kvec.h"
 #include "nvim/ascii.h"
 #include "nvim/autocmd.h"
-#include "nvim/edit.h"
+#include "nvim/drawscreen.h"
 #include "nvim/eval.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/getchar.h"
-#include "nvim/lib/kvec.h"
+#include "nvim/insexpand.h"
 #include "nvim/log.h"
 #include "nvim/main.h"
 #include "nvim/option.h"
 #include "nvim/option_defs.h"
 #include "nvim/os/input.h"
-#include "nvim/screen.h"
 #include "nvim/state.h"
 #include "nvim/ui.h"
 #include "nvim/vim.h"
@@ -57,7 +57,7 @@ getkey:
       // Duplicate display updating logic in vgetorpeek()
       if (((State & MODE_INSERT) != 0 || p_lz) && (State & MODE_CMDLINE) == 0
           && must_redraw != 0 && !need_wait_return) {
-        update_screen(0);
+        update_screen();
         setcursor();  // put cursor back where it belongs
       }
       // Flush screen updates before blocking
@@ -65,7 +65,7 @@ getkey:
       // Call `os_inchar` directly to block for events or user input without
       // consuming anything from `input_buffer`(os/input.c) or calling the
       // mapping engine.
-      (void)os_inchar(NULL, 0, -1, 0, main_loop.events);
+      (void)os_inchar(NULL, 0, -1, typebuf.tb_change_cnt, main_loop.events);
       // If an event was put into the queue, we send K_EVENT directly.
       if (!multiqueue_empty(main_loop.events)) {
         key = K_EVENT;
@@ -211,12 +211,15 @@ void get_mode(char *buf)
       buf[i++] = 'o';
       // to be able to detect force-linewise/blockwise/charwise operations
       buf[i++] = (char)motion_force;
+    } else if (curbuf->terminal) {
+      buf[i++] = 't';
+      if (restart_edit == 'I') {
+        buf[i++] = 'T';
+      }
     } else if (restart_edit == 'I' || restart_edit == 'R'
                || restart_edit == 'V') {
       buf[i++] = 'i';
       buf[i++] = (char)restart_edit;
-    } else if (curbuf->terminal) {
-      buf[i++] = 't';
     }
   }
 
@@ -234,7 +237,7 @@ void may_trigger_modechanged(void)
   char pattern_buf[2 * MODE_MAX_LENGTH];
 
   get_mode(curr_mode);
-  if (STRCMP(curr_mode, last_mode) == 0) {
+  if (strcmp(curr_mode, last_mode) == 0) {
     return;
   }
 

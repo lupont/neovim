@@ -16,10 +16,11 @@
 #include "nvim/buffer_defs.h"
 #include "nvim/change.h"
 #include "nvim/cursor.h"
+#include "nvim/eval.h"
 #include "nvim/eval/userfunc.h"
 #include "nvim/event/loop.h"
 #include "nvim/event/time.h"
-#include "nvim/ex_cmds2.h"
+#include "nvim/ex_eval.h"
 #include "nvim/ex_getln.h"
 #include "nvim/extmark.h"
 #include "nvim/func_attr.h"
@@ -55,12 +56,12 @@ static int regex_match(lua_State *lstate, regprog_T **prog, char_u *str)
   regmatch_T rm;
   rm.regprog = *prog;
   rm.rm_ic = false;
-  bool match = vim_regexec(&rm, str, 0);
+  bool match = vim_regexec(&rm, (char *)str, 0);
   *prog = rm.regprog;
 
   if (match) {
-    lua_pushinteger(lstate, (lua_Integer)(rm.startp[0] - str));
-    lua_pushinteger(lstate, (lua_Integer)(rm.endp[0] - str));
+    lua_pushinteger(lstate, (lua_Integer)(rm.startp[0] - (char *)str));
+    lua_pushinteger(lstate, (lua_Integer)(rm.endp[0] - (char *)str));
     return 2;
   }
   return 0;
@@ -110,7 +111,7 @@ static int regex_match_line(lua_State *lstate)
     return luaL_error(lstate, "invalid row");
   }
 
-  char_u *line = ml_get_buf(buf, rownr + 1, false);
+  char_u *line = (char_u *)ml_get_buf(buf, rownr + 1, false);
   size_t len = STRLEN(line);
 
   if (start < 0 || (size_t)start > len) {
@@ -232,7 +233,7 @@ static int nlua_str_utf_start(lua_State *const lstate) FUNC_ATTR_NONNULL_ALL
   if (offset < 0 || offset > (intptr_t)s1_len) {
     return luaL_error(lstate, "index out of range");
   }
-  int head_offset = mb_head_off((char_u *)s1, (char_u *)s1 + offset - 1);
+  int head_offset = utf_cp_head_off((char_u *)s1, (char_u *)s1 + offset - 1);
   lua_pushinteger(lstate, head_offset);
   return 1;
 }
@@ -252,7 +253,7 @@ static int nlua_str_utf_end(lua_State *const lstate) FUNC_ATTR_NONNULL_ALL
   if (offset < 0 || offset > (intptr_t)s1_len) {
     return luaL_error(lstate, "index out of range");
   }
-  int tail_offset = mb_tail_off((char_u *)s1, (char_u *)s1 + offset - 1);
+  int tail_offset = utf_cp_tail_off(s1, s1 + offset - 1);
   lua_pushinteger(lstate, tail_offset);
   return 1;
 }
@@ -300,7 +301,9 @@ int nlua_regex(lua_State *lstate)
   });
 
   if (ERROR_SET(&err)) {
-    return luaL_error(lstate, "couldn't parse regex: %s", err.msg);
+    nlua_push_errstr(lstate, "couldn't parse regex: %s", err.msg);
+    api_clear_error(&err);
+    return lua_error(lstate);
   }
   assert(prog);
 
@@ -338,12 +341,14 @@ static dict_T *nlua_get_var_scope(lua_State *lstate)
       dict = tabpage->tp_vars;
     }
   } else {
-    luaL_error(lstate, "invalid scope", err.msg);
+    luaL_error(lstate, "invalid scope");
     return NULL;
   }
 
   if (ERROR_SET(&err)) {
-    luaL_error(lstate, "FAIL: %s", err.msg);
+    nlua_push_errstr(lstate, "scoped variable: %s", err.msg);
+    api_clear_error(&err);
+    lua_error(lstate);
     return NULL;
   }
   return dict;
@@ -364,12 +369,19 @@ int nlua_setvar(lua_State *lstate)
     return 0;
   }
 
+  bool watched = tv_dict_is_watched(dict);
+
   if (del) {
     // Delete the key
     if (di == NULL) {
       // Doesn't exist, nothing to do
       return 0;
     } else {
+      // Notify watchers
+      if (watched) {
+        tv_dict_watcher_notify(dict, key.data, NULL, &di->di_tv);
+      }
+
       // Delete the entry
       tv_dict_item_remove(dict, di);
     }
@@ -383,17 +395,29 @@ int nlua_setvar(lua_State *lstate)
       return luaL_error(lstate, "Couldn't convert lua value");
     }
 
+    typval_T oldtv = TV_INITIAL_VALUE;
+
     if (di == NULL) {
       // Need to create an entry
       di = tv_dict_item_alloc_len(key.data, key.size);
       tv_dict_add(dict, di);
     } else {
+      if (watched) {
+        tv_copy(&di->di_tv, &oldtv);
+      }
       // Clear the old value
       tv_clear(&di->di_tv);
     }
 
     // Update the value
     tv_copy(&tv, &di->di_tv);
+
+    // Notify watchers
+    if (watched) {
+      tv_dict_watcher_notify(dict, key.data, &tv, &oldtv);
+      tv_clear(&oldtv);
+    }
+
     // Clear the temporary variable
     tv_clear(&tv);
   }
@@ -469,6 +493,52 @@ static int nlua_stricmp(lua_State *const lstate) FUNC_ATTR_NONNULL_ALL
   return 1;
 }
 
+#if defined(HAVE_ICONV)
+
+/// Convert string from one encoding to another
+static int nlua_iconv(lua_State *lstate)
+{
+  int narg = lua_gettop(lstate);
+
+  if (narg < 3) {
+    return luaL_error(lstate, "Expected at least 3 arguments");
+  }
+
+  for (int i = 1; i <= 3; i++) {
+    if (lua_type(lstate, i) != LUA_TSTRING) {
+      return luaL_argerror(lstate, i, "expected string");
+    }
+  }
+
+  size_t str_len = 0;
+  const char *str = lua_tolstring(lstate, 1, &str_len);
+
+  char_u *from = (char_u *)enc_canonize(enc_skip((char *)lua_tolstring(lstate, 2, NULL)));
+  char_u *to   = (char_u *)enc_canonize(enc_skip((char *)lua_tolstring(lstate, 3, NULL)));
+
+  vimconv_T vimconv;
+  vimconv.vc_type = CONV_NONE;
+  convert_setup_ext(&vimconv, (char *)from, false, (char *)to, false);
+
+  char_u *ret = (char_u *)string_convert(&vimconv, (char *)str, &str_len);
+
+  convert_setup(&vimconv, NULL, NULL);
+
+  xfree(from);
+  xfree(to);
+
+  if (ret == NULL) {
+    lua_pushnil(lstate);
+  } else {
+    lua_pushlstring(lstate, (char *)ret, str_len);
+    xfree(ret);
+  }
+
+  return 1;
+}
+
+#endif
+
 void nlua_state_add_stdlib(lua_State *const lstate, bool is_thread)
 {
   if (!is_thread) {
@@ -514,6 +584,13 @@ void nlua_state_add_stdlib(lua_State *const lstate, bool is_thread)
     // vim.spell
     luaopen_spell(lstate);
     lua_setfield(lstate, -2, "spell");
+
+#if defined(HAVE_ICONV)
+    // vim.iconv
+    // depends on p_ambw, p_emoji
+    lua_pushcfunction(lstate, &nlua_iconv);
+    lua_setfield(lstate, -2, "iconv");
+#endif
   }
 
   // vim.mpack
@@ -536,4 +613,15 @@ void nlua_state_add_stdlib(lua_State *const lstate, bool is_thread)
   // vim.json
   lua_cjson_new(lstate);
   lua_setfield(lstate, -2, "json");
+}
+
+/// like luaL_error, but allow cleanup
+void nlua_push_errstr(lua_State *L, const char *fmt, ...)
+{
+  va_list argp;
+  va_start(argp, fmt);
+  luaL_where(L, 1);
+  lua_pushvfstring(L, fmt, argp);
+  va_end(argp);
+  lua_concat(L, 2);
 }

@@ -1,8 +1,7 @@
 " Test for variable tabstops
 
-if !has("vartabs")
-  finish
-endif
+source check.vim
+CheckFeature vartabs
 
 source view_util.vim
 
@@ -428,6 +427,20 @@ func Test_varsofttabstop()
   set backspace&
   iunmap <F2>
   close!
+endfunc
+
+" Setting 'shiftwidth' to a negative value, should set it to either the value
+" of 'tabstop' (if 'vartabstop' is not set) or to the first value in
+" 'vartabstop'
+func Test_shiftwidth_vartabstop()
+  throw 'Skipped: Nvim removed this behavior in #6377'
+  setlocal tabstop=7 vartabstop=
+  call assert_fails('set shiftwidth=-1', 'E487:')
+  call assert_equal(7, &shiftwidth)
+  setlocal tabstop=7 vartabstop=5,7,10
+  call assert_fails('set shiftwidth=-1', 'E487:')
+  call assert_equal(5, &shiftwidth)
+  setlocal shiftwidth& vartabstop& tabstop&
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

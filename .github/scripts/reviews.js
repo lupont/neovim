@@ -9,15 +9,16 @@ module.exports = async ({github, context}) => {
   const reviewers = new Set()
   if (labels.includes('api')) {
     reviewers.add("bfredl")
-    reviewers.add("gpanders")
     reviewers.add("muniter")
   }
 
   if (labels.includes('build')) {
     reviewers.add("jamessan")
+    reviewers.add("justinmk")
   }
 
   if (labels.includes('ci')) {
+    reviewers.add("dundargoc")
     reviewers.add("jamessan")
   }
 
@@ -54,17 +55,14 @@ module.exports = async ({github, context}) => {
     reviewers.add("gpanders")
   }
 
-  if (labels.includes('gui')) {
-    reviewers.add("glacambre")
-    reviewers.add("smolck")
-  }
-
   if (labels.includes('lsp')) {
     reviewers.add("mfussenegger")
+    reviewers.add("glepnir")
   }
 
   if (labels.includes('treesitter')) {
     reviewers.add("bfredl")
+    reviewers.add("clason")
     reviewers.add("vigoux")
   }
 

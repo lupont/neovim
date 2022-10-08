@@ -613,11 +613,18 @@ list of the current window.
 			And after the last one:
 				:+2argadd y	a b c x y
 			There is no check for duplicates, it is possible to
-			add a file to the argument list twice.
-			The currently edited file is not changed.
+			add a file to the argument list twice.  You can use
+			|:argdedupe| to fix it afterwards: >
+				:argadd *.txt | argdedupe
+<			The currently edited file is not changed.
 			Note: you can also use this method: >
 				:args ## x
 <			This will add the "x" item and sort the new list.
+
+:argded[upe]					*:argded* *:argdedupe*
+			Remove duplicate filenames from the argument list.
+			If your current file is a duplicate, your current file
+			will change to the original file index.
 
 :argd[elete] {pattern} ..		*:argd* *:argdelete* *E480* *E610*
 			Delete files from the argument list that match the
@@ -934,7 +941,7 @@ WRITING WITH MULTIPLE BUFFERS				*buffer-write*
 
 
 Vim will warn you if you try to overwrite a file that has been changed
-elsewhere.  See |timestamp|.
+elsewhere (unless "!" was used).  See |timestamp|.
 
 			    *backup* *E207* *E506* *E507* *E508* *E509* *E510*
 If you write to an existing file (but do not append) while the 'backup',
@@ -1474,8 +1481,8 @@ doing something there and closing it should be OK (if there are no side
 effects from other autocommands).  Closing unrelated windows and buffers will
 get you into trouble.
 
-Before writing a file the timestamp is checked.  If it has changed, Vim will
-ask if you really want to overwrite the file:
+Before writing a file, the timestamp is checked (unless "!" was used).
+If it has changed, Vim will ask if you really want to overwrite the file:
 
 	WARNING: The file has been changed since reading it!!!
 	Do you really want to write to it (y/n)?

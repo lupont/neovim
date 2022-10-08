@@ -26,7 +26,7 @@ Each function :help block is formatted as follows:
 
   - Max width of 78 columns (`text_width`).
   - Indent with spaces (not tabs).
-  - Indent of 16 columns for body text.
+  - Indent of 4 columns for body text (`indentation`).
   - Function signature and helptag (right-aligned) on the same line.
     - Signature and helptag must have a minimum of 8 spaces between them.
     - If the signature is too long, it is placed on the line after the helptag.
@@ -80,6 +80,7 @@ LOG_LEVELS = {
 }
 
 text_width = 78
+indentation = 4
 script_path = os.path.abspath(__file__)
 base_dir = os.path.dirname(os.path.dirname(script_path))
 out_dir = os.path.join(base_dir, 'tmp-{target}-doc')
@@ -259,7 +260,7 @@ CONFIG = {
         'helptag_fmt': lambda name: (
             '*lua-treesitter-core*'
             if name.lower() == 'treesitter'
-            else f'*treesitter-{name.lower()}*'),
+            else f'*lua-treesitter-{name.lower()}*'),
         'fn_helptag_fmt': lambda fstem, name: (
             f'*{name}()*'
             if name != 'new'
@@ -294,14 +295,16 @@ annotation_map = {
 # or if `cond()` is callable and returns True.
 def debug_this(o, cond=True):
     name = ''
+    if cond is False:
+        return
     if not isinstance(o, str):
         try:
             name = o.nodeName
             o = o.toprettyxml(indent='  ', newl='\n')
         except Exception:
             pass
-    if ((callable(cond) and cond())
-            or (not callable(cond) and cond)
+    if (cond is True
+            or (callable(cond) and cond())
             or (not callable(cond) and cond in o)):
         raise RuntimeError('xxx: {}\n{}'.format(name, o))
 
@@ -456,7 +459,7 @@ def max_name(names):
     return max(len(name) for name in names)
 
 
-def update_params_map(parent, ret_map, width=62):
+def update_params_map(parent, ret_map, width=text_width - indentation):
     """Updates `ret_map` with name:desc key-value pairs extracted
     from Doxygen XML node `parent`.
     """
@@ -483,7 +486,8 @@ def update_params_map(parent, ret_map, width=62):
     return ret_map
 
 
-def render_node(n, text, prefix='', indent='', width=62, fmt_vimhelp=False):
+def render_node(n, text, prefix='', indent='', width=text_width - indentation,
+                fmt_vimhelp=False):
     """Renders a node as Vim help text, recursively traversing all descendants."""
 
     def ind(s):
@@ -562,7 +566,7 @@ def render_node(n, text, prefix='', indent='', width=62, fmt_vimhelp=False):
     return text
 
 
-def para_as_map(parent, indent='', width=62, fmt_vimhelp=False):
+def para_as_map(parent, indent='', width=text_width - indentation, fmt_vimhelp=False):
     """Extracts a Doxygen XML <para> node to a map.
 
     Keys:
@@ -656,7 +660,8 @@ def para_as_map(parent, indent='', width=62, fmt_vimhelp=False):
     return chunks, xrefs
 
 
-def fmt_node_as_vimhelp(parent, width=62, indent='', fmt_vimhelp=False):
+def fmt_node_as_vimhelp(parent, width=text_width - indentation, indent='',
+                        fmt_vimhelp=False):
     """Renders (nested) Doxygen <para> nodes as Vim :help text.
 
     NB: Blank lines in a docstring manifest as <para> tags.
@@ -668,7 +673,7 @@ def fmt_node_as_vimhelp(parent, width=62, indent='', fmt_vimhelp=False):
         max_name_len = max_name(m.keys()) + 4
         out = ''
         for name, desc in m.items():
-            name = '    {}'.format('{{{}}}'.format(name).ljust(max_name_len))
+            name = '  • {}'.format('{{{}}}'.format(name).ljust(max_name_len))
             out += '{}{}\n'.format(name, desc)
         return out.rstrip()
 
@@ -798,7 +803,7 @@ def extract_from_xml(filename, target, width, fmt_vimhelp):
 
         prefix = '%s(' % name
         suffix = '%s)' % ', '.join('{%s}' % a[1] for a in params
-                                   if a[0] not in ('void', 'Error'))
+                                   if a[0] not in ('void', 'Error', 'Arena'))
 
         if not fmt_vimhelp:
             c_decl = '%s %s(%s);' % (return_type, name, ', '.join(c_args))
@@ -838,7 +843,8 @@ def extract_from_xml(filename, target, width, fmt_vimhelp):
             log.debug(
                 textwrap.indent(
                     re.sub(r'\n\s*\n+', '\n',
-                           desc.toprettyxml(indent='  ', newl='\n')), ' ' * 16))
+                           desc.toprettyxml(indent='  ', newl='\n')),
+                    ' ' * indentation))
 
         fn = {
             'annotations': list(annotations),
@@ -883,7 +889,7 @@ def extract_from_xml(filename, target, width, fmt_vimhelp):
 def fmt_doxygen_xml_as_vimhelp(filename, target):
     """Entrypoint for generating Vim :help from from Doxygen XML.
 
-    Returns 3 items:
+    Returns 2 items:
       1. Vim help text for functions found in `filename`.
       2. Vim help text for deprecated functions.
     """
@@ -897,6 +903,8 @@ def fmt_doxygen_xml_as_vimhelp(filename, target):
             doc = fmt_node_as_vimhelp(fn['desc_node'], fmt_vimhelp=True)
         if not doc and fn['brief_desc_node']:
             doc = fmt_node_as_vimhelp(fn['brief_desc_node'])
+        if not doc and name.startswith("nvim__"):
+            continue
         if not doc:
             doc = 'TODO: Documentation'
 
@@ -916,7 +924,7 @@ def fmt_doxygen_xml_as_vimhelp(filename, target):
             doc += '\n<'
 
         func_doc = fn['signature'] + '\n'
-        func_doc += textwrap.indent(clean_lines(doc), ' ' * 16)
+        func_doc += textwrap.indent(clean_lines(doc), ' ' * indentation)
 
         # Verbatim handling.
         func_doc = re.sub(r'^\s+([<>])$', r'\1', func_doc, flags=re.M)
@@ -947,7 +955,8 @@ def fmt_doxygen_xml_as_vimhelp(filename, target):
 
         func_doc = "\n".join(split_lines)
 
-        if name.startswith(CONFIG[target]['fn_name_prefix']):
+        if (name.startswith(CONFIG[target]['fn_name_prefix'])
+           and name != "nvim_error_event"):
             fns_txt[name] = func_doc
 
     return ('\n\n'.join(list(fns_txt.values())),
@@ -1087,7 +1096,11 @@ def main(config, args):
                         fn_map_full.update(fn_map)
 
         if len(sections) == 0:
-            fail(f'no sections for target: {target}')
+            if target == 'lua':
+                fail(f'no sections for target: {target} (this usually means'
+                     + ' "luajit" was not found by scripts/lua2dox_filter)')
+            else:
+                fail(f'no sections for target: {target}')
         if len(sections) > len(CONFIG[target]['section_order']):
             raise RuntimeError(
                 'found new modules "{}"; update the "section_order" map'.format(
@@ -1111,7 +1124,7 @@ def main(config, args):
             docs += '\n\n\n'
 
         docs = docs.rstrip() + '\n\n'
-        docs += ' vim:tw=78:ts=8:ft=help:norl:\n'
+        docs += f' vim:tw=78:ts=8:sw={indentation}:sts={indentation}:et:ft=help:norl:\n'
 
         doc_file = os.path.join(base_dir, 'runtime', 'doc',
                                 CONFIG[target]['filename'])

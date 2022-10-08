@@ -5,6 +5,7 @@ local source = helpers.source
 local command = helpers.command
 local assert_alive = helpers.assert_alive
 local uname = helpers.uname
+local exec = helpers.exec
 local eval = helpers.eval
 local eq = helpers.eq
 
@@ -94,119 +95,6 @@ local function test_cmdline(linegrid)
       {1:~                        }|
                                |
     ]]}
-  end)
-
-  describe("redraws statusline on entering", function()
-    before_each(function()
-      command('set laststatus=2')
-      command('set statusline=%{mode()}')
-    end)
-
-    it('from normal mode', function()
-      screen:expect{grid=[[
-        ^                         |
-        {1:~                        }|
-        {1:~                        }|
-        {3:n                        }|
-                                 |
-      ]]}
-
-      feed(':')
-      screen:expect{grid=[[
-        ^                         |
-        {1:~                        }|
-        {1:~                        }|
-        {3:c                        }|
-                                 |
-      ]], cmdline={{
-        firstc = ":",
-        content = {{""}},
-        pos = 0,
-      }}}
-    end)
-
-    it('from normal mode when : is mapped', function()
-      command('nnoremap ; :')
-
-      screen:expect{grid=[[
-        ^                         |
-        {1:~                        }|
-        {1:~                        }|
-        {3:n                        }|
-                                 |
-      ]]}
-
-      feed(';')
-      screen:expect{grid=[[
-        ^                         |
-        {1:~                        }|
-        {1:~                        }|
-        {3:c                        }|
-                                 |
-      ]], cmdline={{
-        firstc = ":",
-        content = {{""}},
-        pos = 0,
-      }}}
-    end)
-
-    it('but not with scrolled messages', function()
-      screen:try_resize(35,10)
-      feed(':echoerr doesnotexist<cr>')
-      screen:expect{grid=[[
-                                           |
-        {1:~                                  }|
-        {1:~                                  }|
-        {1:~                                  }|
-        {1:~                                  }|
-        {3:                                   }|
-        {4:E121: Undefined variable: doesnotex}|
-        {4:ist}                                |
-        {5:Press ENTER or type command to cont}|
-        {5:inue}^                               |
-      ]]}
-      feed(':echoerr doesnotexist<cr>')
-      screen:expect{grid=[[
-                                           |
-        {1:~                                  }|
-        {3:                                   }|
-        {4:E121: Undefined variable: doesnotex}|
-        {4:ist}                                |
-        {5:Press ENTER or type command to cont}|
-        {4:E121: Undefined variable: doesnotex}|
-        {4:ist}                                |
-        {5:Press ENTER or type command to cont}|
-        {5:inue}^                               |
-      ]]}
-
-      feed(':echoerr doesnotexist<cr>')
-      screen:expect{grid=[[
-        {4:E121: Undefined variable: doesnotex}|
-        {4:ist}                                |
-        {5:Press ENTER or type command to cont}|
-        {4:E121: Undefined variable: doesnotex}|
-        {4:ist}                                |
-        {5:Press ENTER or type command to cont}|
-        {4:E121: Undefined variable: doesnotex}|
-        {4:ist}                                |
-        {5:Press ENTER or type command to cont}|
-        {5:inue}^                               |
-      ]]}
-
-      feed('<cr>')
-      screen:expect{grid=[[
-        ^                                   |
-        {1:~                                  }|
-        {1:~                                  }|
-        {1:~                                  }|
-        {1:~                                  }|
-        {1:~                                  }|
-        {1:~                                  }|
-        {1:~                                  }|
-        {3:n                                  }|
-                                           |
-      ]]}
-    end)
   end)
 
   it("works with input()", function()
@@ -883,6 +771,177 @@ describe('cmdline redraw', function()
   end)
 end)
 
+describe('statusline is redrawn on entering cmdline', function()
+  local screen
+
+  before_each(function()
+    clear()
+    screen = new_screen()
+    command('set laststatus=2')
+  end)
+
+  it('from normal mode', function()
+    command('set statusline=%{mode()}')
+    screen:expect{grid=[[
+      ^                         |
+      {1:~                        }|
+      {1:~                        }|
+      {3:n                        }|
+                               |
+    ]]}
+
+    feed(':')
+    screen:expect{grid=[[
+                               |
+      {1:~                        }|
+      {1:~                        }|
+      {3:c                        }|
+      :^                        |
+    ]]}
+  end)
+
+  it('from normal mode when : is mapped', function()
+    command('set statusline=%{mode()}')
+    command('nnoremap ; :')
+
+    screen:expect{grid=[[
+      ^                         |
+      {1:~                        }|
+      {1:~                        }|
+      {3:n                        }|
+                               |
+    ]]}
+
+    feed(';')
+    screen:expect{grid=[[
+                               |
+      {1:~                        }|
+      {1:~                        }|
+      {3:c                        }|
+      :^                        |
+    ]]}
+  end)
+
+  it('with scrolled messages', function()
+    screen:try_resize(35,14)
+    exec([[
+      let g:count = 0
+      autocmd CmdlineEnter * let g:count += 1
+      split
+      resize 1
+      setlocal statusline=%{mode()}%{g:count}
+      setlocal winbar=%{mode()}%{g:count}
+    ]])
+    feed(':echoerr doesnotexist<cr>')
+    screen:expect{grid=[[
+      {9:c1                                 }|
+                                         |
+      {3:c1                                 }|
+                                         |
+      {1:~                                  }|
+      {1:~                                  }|
+      {1:~                                  }|
+      {1:~                                  }|
+      {1:~                                  }|
+      {3:                                   }|
+      {4:E121: Undefined variable: doesnotex}|
+      {4:ist}                                |
+      {5:Press ENTER or type command to cont}|
+      {5:inue}^                               |
+    ]]}
+    feed(':echoerr doesnotexist<cr>')
+    screen:expect{grid=[[
+      {9:c2                                 }|
+                                         |
+      {3:c2                                 }|
+                                         |
+      {1:~                                  }|
+      {1:~                                  }|
+      {3:                                   }|
+      {4:E121: Undefined variable: doesnotex}|
+      {4:ist}                                |
+      {5:Press ENTER or type command to cont}|
+      {4:E121: Undefined variable: doesnotex}|
+      {4:ist}                                |
+      {5:Press ENTER or type command to cont}|
+      {5:inue}^                               |
+    ]]}
+
+    feed(':echoerr doesnotexist<cr>')
+    screen:expect{grid=[[
+      {9:c3                                 }|
+                                         |
+      {3:c3                                 }|
+      {3:                                   }|
+      {4:E121: Undefined variable: doesnotex}|
+      {4:ist}                                |
+      {5:Press ENTER or type command to cont}|
+      {4:E121: Undefined variable: doesnotex}|
+      {4:ist}                                |
+      {5:Press ENTER or type command to cont}|
+      {4:E121: Undefined variable: doesnotex}|
+      {4:ist}                                |
+      {5:Press ENTER or type command to cont}|
+      {5:inue}^                               |
+    ]]}
+
+    feed('<cr>')
+    screen:expect{grid=[[
+      {9:n3                                 }|
+      ^                                   |
+      {3:n3                                 }|
+                                         |
+      {1:~                                  }|
+      {1:~                                  }|
+      {1:~                                  }|
+      {1:~                                  }|
+      {1:~                                  }|
+      {1:~                                  }|
+      {1:~                                  }|
+      {1:~                                  }|
+      {2:[No Name]                          }|
+                                         |
+    ]]}
+  end)
+
+  describe('if custom statusline is set by', function()
+    before_each(function()
+      command('set statusline=')
+      screen:expect{grid=[[
+        ^                         |
+        {1:~                        }|
+        {1:~                        }|
+        {3:[No Name]                }|
+                                 |
+      ]]}
+    end)
+
+    it('CmdlineEnter autocommand', function()
+      command('autocmd CmdlineEnter * set statusline=command')
+      feed(':')
+      screen:expect{grid=[[
+                                 |
+        {1:~                        }|
+        {1:~                        }|
+        {3:command                  }|
+        :^                        |
+      ]]}
+    end)
+
+    it('ModeChanged autocommand', function()
+      command('autocmd ModeChanged *:c set statusline=command')
+      feed(':')
+      screen:expect{grid=[[
+                                 |
+        {1:~                        }|
+        {1:~                        }|
+        {3:command                  }|
+        :^                        |
+      ]]}
+    end)
+  end)
+end)
+
 describe("cmdline height", function()
   it("does not crash resized screen #14263", function()
     clear()
@@ -899,6 +958,15 @@ describe('cmdheight=0', function()
   before_each(function()
     clear()
     screen = Screen.new(25, 5)
+    screen:set_default_attr_ids {
+      [1] = {bold = true, foreground = Screen.colors.Blue};
+      [2] = {bold = true, reverse = true};
+      [3] = {bold = true};
+      [4] = {foreground = Screen.colors.White, background = Screen.colors.Red};
+      [5] = {foreground = Screen.colors.SeaGreen4, bold = true};
+      [6] = {reverse = true};
+      [7] = {background = Screen.colors.Yellow};
+    }
     screen:attach()
   end)
 
@@ -906,9 +974,9 @@ describe('cmdheight=0', function()
     command("set cmdheight=1 noruler laststatus=2")
     screen:expect{grid=[[
       ^                         |
-      ~                        |
-      ~                        |
-      [No Name]                |
+      {1:~                        }|
+      {1:~                        }|
+      {2:[No Name]                }|
                                |
     ]]}
   end)
@@ -917,10 +985,10 @@ describe('cmdheight=0', function()
     command("set cmdheight=0 noruler laststatus=2")
     screen:expect{grid=[[
       ^                         |
-      ~                        |
-      ~                        |
-      ~                        |
-      [No Name]                |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {2:[No Name]                }|
     ]]}
   end)
 
@@ -928,10 +996,10 @@ describe('cmdheight=0', function()
     command("set cmdheight=0 ruler laststatus=0")
     screen:expect{grid=[[
       ^                         |
-      ~                        |
-      ~                        |
-      ~                        |
-      ~                        |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
     ]]}
   end)
 
@@ -940,10 +1008,24 @@ describe('cmdheight=0', function()
     feed('i')
     screen:expect{grid=[[
       ^                         |
-      ~                        |
-      ~                        |
-      ~                        |
-      ~                        |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+    ]], showmode={}}
+    feed('<Esc>')
+    eq(0, eval('&cmdheight'))
+  end)
+
+  it("with cmdheight=0 ruler rulerformat laststatus=0", function()
+    command("set cmdheight=0 noruler laststatus=0 rulerformat=%l,%c%= showmode")
+    feed('i')
+    screen:expect{grid=[[
+      ^                         |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
     ]], showmode={}}
     feed('<Esc>')
     eq(0, eval('&cmdheight'))
@@ -968,10 +1050,10 @@ describe('cmdheight=0', function()
     feed('i')
     screen:expect{grid=[[
       ^                         |
-      ~                        |
-      ~                        |
-      ~                        |
-      -- INSERT --             |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {3:-- INSERT --}             |
     ]]}
     feed('<Esc>')
     eq(1, eval('&cmdheight'))
@@ -982,19 +1064,19 @@ describe('cmdheight=0', function()
     feed(':')
     screen:expect{grid=[[
                                |
-      ~                        |
-      ~                        |
-      ~                        |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
       :^                        |
     ]]}
-    eq(1, eval('&cmdheight'))
+    eq(0, eval('&cmdheight'))
     feed('<cr>')
     screen:expect{grid=[[
       ^                         |
-      ~                        |
-      ~                        |
-      ~                        |
-      ~                        |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
     ]], showmode={}}
     eq(0, eval('&cmdheight'))
   end)
@@ -1004,19 +1086,19 @@ describe('cmdheight=0', function()
     feed(':call input("foo >")<cr>')
     screen:expect{grid=[[
                                |
-      ~                        |
-      ~                        |
-      ~                        |
+      {1:~                        }|
+      {2:                         }|
+      :call input("foo >")     |
       foo >^                    |
     ]]}
-    eq(1, eval('&cmdheight'))
+    eq(0, eval('&cmdheight'))
     feed('<cr>')
     screen:expect{grid=[[
       ^                         |
-      ~                        |
-      ~                        |
-      ~                        |
-      ~                        |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
     ]], showmode={}}
     eq(0, eval('&cmdheight'))
   end)
@@ -1025,35 +1107,35 @@ describe('cmdheight=0', function()
     command("set cmdheight=0 noruler laststatus=3 winbar=foo")
     feed(':split<CR>')
     screen:expect{grid=[[
-      foo                      |
-                               |
-      E36: Not enough room     |
-      Press ENTER or type comma|
-      nd to continue^           |
+      {2:                         }|
+      :split                   |
+      {4:E36: Not enough room}     |
+      {5:Press ENTER or type comma}|
+      {5:nd to continue}^           |
     ]]}
     feed('<CR>')
     screen:expect{grid=[[
-      foo                      |
+      {3:foo                      }|
       ^                         |
-      ~                        |
-      ~                        |
-      [No Name]                |
+      {1:~                        }|
+      {1:~                        }|
+      {2:[No Name]                }|
     ]]}
     feed(':')
     screen:expect{grid=[[
-      foo                      |
+      {3:foo                      }|
                                |
-      ~                        |
-      [No Name]                |
+      {1:~                        }|
+      {1:~                        }|
       :^                        |
     ]]}
     feed('<Esc>')
     screen:expect{grid=[[
-      foo                      |
+      {3:foo                      }|
       ^                         |
-      ~                        |
-      ~                        |
-      [No Name]                |
+      {1:~                        }|
+      {1:~                        }|
+      {2:[No Name]                }|
     ]], showmode={}}
     eq(0, eval('&cmdheight'))
 
@@ -1065,19 +1147,19 @@ describe('cmdheight=0', function()
     feed('qq')
     screen:expect{grid=[[
       ^                         |
-      ~                        |
-      ~                        |
-      ~                        |
-      ~                        |
-    ]], showmode={}}
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+    ]]}
     feed('q')
     screen:expect{grid=[[
       ^                         |
-      ~                        |
-      ~                        |
-      ~                        |
-      ~                        |
-    ]], showmode={}}
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+    ]], unchanged=true}
   end)
 
   it("when substitute text", function()
@@ -1085,28 +1167,28 @@ describe('cmdheight=0', function()
     feed('ifoo<ESC>')
     screen:expect{grid=[[
       fo^o                      |
-      ~                        |
-      ~                        |
-      ~                        |
-      [No Name] [+]            |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {2:[No Name] [+]            }|
     ]]}
 
     feed(':%s/foo/bar/gc<CR>')
     screen:expect{grid=[[
-      foo                      |
-      ~                        |
-      ~                        |
-      [No Name] [+]            |
-      replace wi...q/l/^E/^Y)?^ |
+      {6:foo}                      |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {5:replace wi...q/l/^E/^Y)?}^ |
     ]]}
 
     feed('y')
     screen:expect{grid=[[
       ^bar                      |
-      ~                        |
-      ~                        |
-      ~                        |
-      [No Name] [+]            |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {2:[No Name] [+]            }|
     ]]}
 
     assert_alive()
@@ -1116,5 +1198,171 @@ describe('cmdheight=0', function()
     command("set cmdheight=0")
     feed('<C-w>+')
     eq(0, eval('&cmdheight'))
+  end)
+
+  it("with non-silent mappings with cmdline", function()
+    command("set cmdheight=0")
+    command("map <f3> :nohlsearch<cr>")
+    feed('iaabbaa<esc>/aa<cr>')
+    screen:expect{grid=[[
+      {7:^aa}bb{7:aa}                   |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+    ]]}
+
+    feed('<f3>')
+    screen:expect{grid=[[
+      ^aabbaa                   |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+    ]]}
+  end)
+
+  it('with silent! at startup', function()
+    clear{args={'-c', 'set cmdheight=0', '-c', 'autocmd VimEnter * silent! call Foo()'}}
+    screen:attach()
+    -- doesn't crash while not displaying silent! error message
+    screen:expect{grid=[[
+      ^                         |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+    ]]}
+  end)
+
+  it('with multigrid', function()
+    clear{args={'--cmd', 'set cmdheight=0'}}
+    screen:attach{ext_multigrid=true}
+    screen:expect{grid=[[
+    ## grid 1
+      [2:-------------------------]|
+      [2:-------------------------]|
+      [2:-------------------------]|
+      [2:-------------------------]|
+      [2:-------------------------]|
+    ## grid 2
+      ^                         |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+    ## grid 3
+    ]], win_viewport={
+      [2] = {win = {id = 1000}, topline = 0, botline = 2, curline = 0, curcol = 0, linecount = 1};
+    }}
+
+    feed '/p'
+    screen:expect{grid=[[
+    ## grid 1
+      [2:-------------------------]|
+      [2:-------------------------]|
+      [2:-------------------------]|
+      [2:-------------------------]|
+      [3:-------------------------]|
+    ## grid 2
+                               |
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+      {1:~                        }|
+    ## grid 3
+      /p^                       |
+    ]], win_viewport={
+      [2] = {win = {id = 1000}, topline = 0, botline = 2, curline = 0, curcol = 0, linecount = 1};
+    }}
+  end)
+
+  it('winbar is redrawn on entering cmdline and :redrawstatus #20336', function()
+    exec([[
+      set cmdheight=0
+      set winbar=%{mode()}%=:%{getcmdline()}
+    ]])
+    feed(':')
+    screen:expect([[
+      {3:c                       :}|
+                               |
+      {1:~                        }|
+      {1:~                        }|
+      :^                        |
+    ]])
+    feed('echo')
+    -- not redrawn yet
+    screen:expect([[
+      {3:c                       :}|
+                               |
+      {1:~                        }|
+      {1:~                        }|
+      :echo^                    |
+    ]])
+    command('redrawstatus')
+    screen:expect([[
+      {3:c                   :echo}|
+                               |
+      {1:~                        }|
+      {1:~                        }|
+      :echo^                    |
+    ]])
+  end)
+
+  it('window equalization with laststatus=0 #20367', function()
+    screen:try_resize(60, 9)
+    command('set cmdheight=0 laststatus=0')
+    command('vsplit')
+    screen:expect([[
+      ^                              │                             |
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+    ]])
+    feed(':')
+    command('split')
+    feed('<Esc>')
+    screen:expect([[
+      ^                              │                             |
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {2:[No Name]                     }│{1:~                            }|
+                                    │{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+    ]])
+    command('resize 2')
+    screen:expect([[
+      ^                              │                             |
+      {1:~                             }│{1:~                            }|
+      {2:[No Name]                     }│{1:~                            }|
+                                    │{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+    ]])
+    feed(':')
+    command('wincmd =')
+    feed('<Esc>')
+    screen:expect([[
+      ^                              │                             |
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {2:[No Name]                     }│{1:~                            }|
+                                    │{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+      {1:~                             }│{1:~                            }|
+    ]])
   end)
 end)

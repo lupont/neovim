@@ -47,8 +47,10 @@ Input						*terminal-input*
 
 To send input, enter |Terminal-mode| with |i|, |I|, |a|, |A| or
 |:startinsert|. In this mode all keys except <C-\> are sent to the underlying
-program. If <C-\> is pressed, the next key is sent unless it is <C-N>. Use
-<C-\><C-N> to return to normal-mode. |CTRL-\_CTRL-N|
+program. If <C-\> is pressed, the next key is sent unless it is <C-N> or <C-O>.
+Use <C-\><C-N> to return to normal mode. |CTRL-\_CTRL-N|
+Use <C-\><C-O> to execute one normal mode command and then return to terminal
+mode. *t_CTRL-\_CTRL-O*
 
 Terminal-mode forces these local options:
 
@@ -79,6 +81,9 @@ To use `ALT+{h,j,k,l}` to navigate windows from any mode: >
     :nnoremap <A-j> <C-w>j
     :nnoremap <A-k> <C-w>k
     :nnoremap <A-l> <C-w>l
+
+You can also create menus similar to terminal mode mappings, but you have to
+use |:tlmenu| instead of |:tmenu|.
 
 Mouse input has the following behavior:
 
@@ -467,6 +472,20 @@ You can define your own shortcuts (mappings) to control gdb, that can work in
 any window, using the TermDebugSendCommand() function.  Example: >
 	map ,w :call TermDebugSendCommand('where')<CR>
 The argument is the gdb command.
+
+
+Popup menu ~
+							*termdebug_popup*
+
+By default the Termdebug plugin sets 'mousemodel' to "popup_setpos" and adds
+these entries to the popup menu:
+	Set breakpoint		`:Break`
+	Clear breakpoint	`:Clear`
+	Evaluate		`:Evaluate`
+If you don't want this then disable it with: >
+	let g:termdebug_config['popup'] = 0
+or if there is no g:termdebug_config: >
+	let g:termdebug_popup = 0
 
 
 Vim window width ~

@@ -96,7 +96,7 @@ build/.ran-cmake: | deps
 	cd build && $(CMAKE_PRG) -G '$(CMAKE_GENERATOR)' $(CMAKE_FLAGS) $(CMAKE_EXTRA_FLAGS) $(MAKEFILE_DIR)
 	touch $@
 
-deps: | build/.ran-third-party-cmake
+deps: | build/.ran-deps-cmake
 ifeq ($(call filter-true,$(USE_BUNDLED)),)
 	+$(BUILD_TOOL) -C $(DEPS_BUILD_DIR)
 endif
@@ -104,12 +104,12 @@ endif
 ifeq ($(call filter-true,$(USE_BUNDLED)),)
 $(DEPS_BUILD_DIR):
 	mkdir -p "$@"
-build/.ran-third-party-cmake:: $(DEPS_BUILD_DIR)
+build/.ran-deps-cmake:: $(DEPS_BUILD_DIR)
 	cd $(DEPS_BUILD_DIR) && \
 		$(CMAKE_PRG) -G '$(CMAKE_GENERATOR)' $(BUNDLED_CMAKE_FLAG) $(BUNDLED_LUA_CMAKE_FLAG) \
-		$(DEPS_CMAKE_FLAGS) $(MAKEFILE_DIR)/third-party
+		$(DEPS_CMAKE_FLAGS) $(MAKEFILE_DIR)/cmake.deps
 endif
-build/.ran-third-party-cmake::
+build/.ran-deps-cmake::
 	mkdir -p build
 	touch $@
 
@@ -127,32 +127,17 @@ endif
 src/nvim/testdir/%.vim: phony_force
 	+$(SINGLE_MAKE) -C src/nvim/testdir NVIM_PRG=$(NVIM_PRG) SCRIPTS= $(MAKEOVERRIDES) $(patsubst src/nvim/testdir/%.vim,%,$@)
 
-build/runtime/doc/tags helptags: | nvim
-	+$(BUILD_TOOL) -C build runtime/doc/tags
-
-# Builds help HTML _and_ checks for invalid help tags.
-helphtml: | nvim build/runtime/doc/tags
-	+$(BUILD_TOOL) -C build doc_html
-
 functionaltest functionaltest-lua unittest benchmark: | nvim
 	$(BUILD_TOOL) -C build $@
 
-lintlua lintsh lintpy lintuncrustify lintc lintcfull check-single-includes generated-sources: | build/.ran-cmake
+lintlua lintsh lintpy lintuncrustify lintc lintcfull check-single-includes generated-sources lintcommit lint formatc formatlua format: | build/.ran-cmake
 	$(CMAKE_PRG) --build build --target $@
-
-commitlint: | nvim
-	$(NVIM_PRG) -u NONE -es +"lua require('scripts.lintcommit').main({trace=false})"
-
-_opt_commitlint:
-	@test -x build/bin/nvim && { $(MAKE) commitlint; exit $$?; } \
-		|| echo "SKIP: commitlint (build/bin/nvim not found)"
 
 test: functionaltest unittest
 
 clean:
 	+test -d build && $(BUILD_TOOL) -C build clean || true
 	$(MAKE) -C src/nvim/testdir clean
-	$(MAKE) -C runtime/doc clean
 	$(MAKE) -C runtime/indent clean
 
 distclean:
@@ -171,8 +156,6 @@ appimage:
 appimage-%:
 	bash scripts/genappimage.sh $*
 
-lint: check-single-includes lintc lintlua lintpy lintsh _opt_commitlint lintuncrustify
-
 # Generic pattern rules, allowing for `make build/bin/nvim` etc.
 # Does not work with "Unix Makefiles".
 ifeq ($(CMAKE_GENERATOR),Ninja)
@@ -183,4 +166,4 @@ $(DEPS_BUILD_DIR)/%: phony_force
 	$(BUILD_TOOL) -C $(DEPS_BUILD_DIR) $(patsubst $(DEPS_BUILD_DIR)/%,%,$@)
 endif
 
-.PHONY: test lintlua lintpy lintsh functionaltest unittest lint lintc clean distclean nvim libnvim cmake deps install appimage checkprefix commitlint
+.PHONY: test lintlua lintpy lintsh functionaltest unittest lint lintc clean distclean nvim libnvim cmake deps install appimage checkprefix lintcommit formatc formatlua format

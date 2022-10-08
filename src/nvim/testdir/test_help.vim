@@ -92,6 +92,11 @@ func Test_help_local_additions()
   let &rtp = rtp_save
 endfunc
 
+func Test_help_completion()
+  call feedkeys(":help :undo\<C-A>\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"help :undo :undoj :undol :undojoin :undolist', @:)
+endfunc
+
 " Test for the :helptags command
 func Test_helptag_cmd()
   call mkdir('Xdir/a/doc', 'p')
@@ -134,6 +139,17 @@ func Test_helptag_cmd()
   call assert_fails('helptags Xdir', 'E154:')
 
   call delete('Xdir', 'rf')
+endfunc
+
+" Test for setting the 'helpheight' option in the help window
+func Test_help_window_height()
+  let &cmdheight = &lines - 24
+  set helpheight=10
+  help
+  set helpheight=14
+  call assert_equal(14, winheight(0))
+  set helpheight& cmdheight=1
+  close
 endfunc
 
 func Test_help_long_argument()

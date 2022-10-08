@@ -308,7 +308,7 @@ These names for keys are used in the documentation.  They can also be used
 with the ":map" command.
 
 notation	meaning		    equivalent	decimal value(s)	~
------------------------------------------------------------------------
+----------------------------------------------------------------------- ~
 <Nul>		zero			CTRL-@	  0 (stored as 10) *<Nul>*
 <BS>		backspace		CTRL-H	  8	*backspace*
 <Tab>		tab			CTRL-I	  9	*tab* *Tab*
@@ -383,8 +383,8 @@ Note:
   <k1>, ..., <k9> and <kPoint> will not work.
 - Nvim supports mapping multibyte chars with modifiers such as `<M-ä>`. Which
   combinations actually work depends on the the UI or host terminal.
-- When a key is pressed using a meta or alt modifier and no mapping exists
-  for that keypress, Nvim behaves as though <Esc> was pressed before the key.
+- When a key is pressed using a meta or alt modifier and no mapping exists for
+  that keypress, Nvim may behave as though <Esc> was pressed before the key.
 - It is possible to notate combined modifiers (e.g. <C-A-T> for CTRL-ALT-T),
   but your terminal must encode the input for that to work. |tui-input|
 
@@ -415,6 +415,10 @@ The first one only works when the 'B' flag is not in 'cpoptions'.  The second
 one always works.
 To get a literal "<lt>" in a mapping: >
 	:map <C-L> <lt>lt>
+
+The notation can be used in a double quoted strings, using "\<" at the start,
+e.g. "\<C-Space>".  This results in a special key code.  To convert this back
+to readable text use `keytrans()`.
 
 ==============================================================================
 Modes, introduction				*vim-modes-intro* *vim-modes*
@@ -458,7 +462,7 @@ Ex mode			Like Command-line mode, but after entering a command
 Terminal mode		In Terminal mode all input (except CTRL-\) is sent to
 			the process running in the current |terminal| buffer.
 			If CTRL-\ is pressed, the next key is sent unless it
-			is CTRL-N (|CTRL-\_CTRL-N|).
+			is CTRL-N (|CTRL-\_CTRL-N|) or CTRL-O (|t_CTRL-\_CTRL-O|).
 			If the 'showmode' option is on "-- TERMINAL --" is shown
 			at the bottom of the window.
 
@@ -526,31 +530,32 @@ Ex		 :vi	  --	  --	 --	    --	      --
 
 -- not possible
 
-*1 Go from Normal mode to Insert mode by giving the command "i", "I", "a",
-   "A", "o", "O", "c", "C", "s" or S".
-*2 Go from Visual mode to Normal mode by giving a non-movement command, which
-   causes the command to be executed, or by hitting <Esc> "v", "V" or "CTRL-V"
-   (see |v_v|), which just stops Visual mode without side effects.
-*3 Go from Command-line mode to Normal mode by:
-   - Hitting <CR> or <NL>, which causes the entered command to be executed.
-   - Deleting the complete line (e.g., with CTRL-U) and giving a final <BS>.
-   - Hitting CTRL-C or <Esc>, which quits the command-line without executing
-     the command.
-   In the last case <Esc> may be the character defined with the 'wildchar'
-   option, in which case it will start command-line completion.  You can
-   ignore that and type <Esc> again.
-*4 Go from Normal to Select mode by:
-   - use the mouse to select text while 'selectmode' contains "mouse"
-   - use a non-printable command to move the cursor while keeping the Shift
-     key pressed, and the 'selectmode' option contains "key"
-   - use "v", "V" or "CTRL-V" while 'selectmode' contains "cmd"
-   - use "gh", "gH" or "g CTRL-H"  |g_CTRL-H|
-*5 Go from Select mode to Normal mode by using a non-printable command to move
-   the cursor, without keeping the Shift key pressed.
-*6 Go from Select mode to Insert mode by typing a printable character.  The
-   selection is deleted and the character is inserted.
+* 1 Go from Normal mode to Insert mode by giving the command "i", "I", "a",
+    "A", "o", "O", "c", "C", "s" or S".
+* 2 Go from Visual mode to Normal mode by giving a non-movement command, which
+    causes the command to be executed, or by hitting <Esc> "v", "V" or "CTRL-V"
+    (see |v_v|), which just stops Visual mode without side effects.
+* 3 Go from Command-line mode to Normal mode by:
+    - Hitting <CR> or <NL>, which causes the entered command to be executed.
+    - Deleting the complete line (e.g., with CTRL-U) and giving a final <BS>.
+    - Hitting CTRL-C or <Esc>, which quits the command-line without executing
+      the command.
+    In the last case <Esc> may be the character defined with the 'wildchar'
+    option, in which case it will start command-line completion.  You can
+    ignore that and type <Esc> again.
+* 4 Go from Normal to Select mode by:
+    - use the mouse to select text while 'selectmode' contains "mouse"
+    - use a non-printable command to move the cursor while keeping the Shift
+      key pressed, and the 'selectmode' option contains "key"
+    - use "v", "V" or "CTRL-V" while 'selectmode' contains "cmd"
+    - use "gh", "gH" or "g CTRL-H"  |g_CTRL-H|
+* 5 Go from Select mode to Normal mode by using a non-printable command to move
+    the cursor, without keeping the Shift key pressed.
+* 6 Go from Select mode to Insert mode by typing a printable character.  The
+    selection is deleted and the character is inserted.
 
-	*CTRL-\_CTRL-N* *i_CTRL-\_CTRL-N* *c_CTRL-\_CTRL-N* *v_CTRL-\_CTRL-N*
+			*CTRL-\_CTRL-N* *i_CTRL-\_CTRL-N* *c_CTRL-\_CTRL-N*
+				      *v_CTRL-\_CTRL-N* *t_CTRL-\_CTRL-N*
 Additionally the command CTRL-\ CTRL-N or <C-\><C-N> can be used to go to
 Normal mode from any other mode.  This can be used to make sure Vim is in
 Normal mode, without causing a beep like <Esc> would.  However, this does not
@@ -565,7 +570,7 @@ gQ			Switch to Ex mode.  This is like typing ":" commands
 			one after another, except:
 			- You don't have to keep pressing ":".
 			- The screen doesn't get updated after each command.
-			Use the ":vi" command |:visual| to exit this mode.
+			Use the `:vi` command (|:visual|) to exit this mode.
 
 ==============================================================================
 Window contents						*window-contents*

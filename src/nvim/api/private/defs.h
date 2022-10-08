@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "klib/kvec.h"
 #include "nvim/func_attr.h"
-#include "nvim/lib/kvec.h"
 #include "nvim/types.h"
 
 #define ARRAY_DICT_INIT KV_INITIAL_VALUE
@@ -36,6 +36,7 @@ typedef enum {
   kMessageTypeRequest = 0,
   kMessageTypeResponse = 1,
   kMessageTypeNotification = 2,
+  kMessageTypeRedrawEvent = 3,
 } MessageType;
 
 /// Mask for all internal calls

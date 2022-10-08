@@ -89,16 +89,16 @@ void server_teardown(void)
 ///
 /// Named pipe format:
 /// - Windows: "\\.\pipe\<name>.<pid>.<counter>"
-/// - Other: "~/.local/state/nvim/<name>.<pid>.<counter>"
+/// - Other: "/tmp/nvim.user/xxx/<name>.<pid>.<counter>"
 char *server_address_new(const char *name)
 {
   static uint32_t count = 0;
   char fmt[ADDRESS_MAX_SIZE];
-#ifdef WIN32
+#ifdef MSWIN
   int r = snprintf(fmt, sizeof(fmt), "\\\\.\\pipe\\%s.%" PRIu64 ".%" PRIu32,
                    name ? name : "nvim", os_get_pid(), count++);
 #else
-  char *dir = get_xdg_home(kXDGStateHome);
+  char *dir = stdpaths_get_xdg_var(kXDGRuntimeDir);
   int r = snprintf(fmt, sizeof(fmt), "%s/%s.%" PRIu64 ".%" PRIu32,
                    dir, name ? name : "nvim", os_get_pid(), count++);
   xfree(dir);
@@ -173,7 +173,7 @@ int server_start(const char *addr)
   ((SocketWatcher **)watchers.ga_data)[watchers.ga_len++] = watcher;
 
   // Update v:servername, if not set.
-  if (STRLEN(get_vim_var_str(VV_SEND_SERVER)) == 0) {
+  if (strlen(get_vim_var_str(VV_SEND_SERVER)) == 0) {
     set_vservername(&watchers);
   }
 
@@ -216,7 +216,7 @@ bool server_stop(char *endpoint)
   watchers.ga_len--;
 
   // Bump v:servername to the next available server, if any.
-  if (strequal(addr, (char *)get_vim_var_str(VV_SEND_SERVER))) {
+  if (strequal(addr, get_vim_var_str(VV_SEND_SERVER))) {
     set_vservername(&watchers);
   }
 

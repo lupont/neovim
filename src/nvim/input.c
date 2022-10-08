@@ -46,7 +46,7 @@ int ask_yesno(const char *const str, const bool direct)
 
   int r = ' ';
   while (r != 'y' && r != 'n') {
-    // Same highlighting as for wait_return.
+    // same highlighting as for wait_return()
     smsg_attr(HL_ATTR(HLF_R), "%s (y/n)?", str);
     if (direct) {
       r = get_keystroke(NULL);
@@ -83,7 +83,6 @@ int get_keystroke(MultiQueue *events)
   int len = 0;
   int n;
   int save_mapped_ctrl_c = mapped_ctrl_c;
-  int waited = 0;
 
   mapped_ctrl_c = 0;        // mappings are not used here
   for (;;) {
@@ -110,10 +109,8 @@ int get_keystroke(MultiQueue *events)
       // Replace zero and K_SPECIAL by a special key code.
       n = fix_input_buffer(buf + len, n);
       len += n;
-      waited = 0;
-    } else if (len > 0) {
-      waited++;             // keep track of the waiting time
     }
+
     if (n > 0) {  // found a termcode: adjust length
       len = n;
     }

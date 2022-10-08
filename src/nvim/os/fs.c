@@ -27,7 +27,7 @@
 #include "nvim/path.h"
 #include "nvim/strings.h"
 
-#ifdef WIN32
+#ifdef MSWIN
 # include "nvim/mbyte.h"  // for utf8_to_utf16, utf16_to_utf8
 #endif
 
@@ -126,13 +126,13 @@ bool os_isrealdir(const char *name)
   }
 }
 
-/// Check if the given path is a directory or not.
+/// Check if the given path exists and is a directory.
 ///
 /// @return `true` if `name` is a directory.
-bool os_isdir(const char_u *name)
+bool os_isdir(const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
-  int32_t mode = os_getperm((const char *)name);
+  int32_t mode = os_getperm(name);
   if (mode < 0) {
     return false;
   }
@@ -144,25 +144,6 @@ bool os_isdir(const char_u *name)
   return true;
 }
 
-/// Check if the given path is a directory and is executable.
-/// Gives the same results as `os_isdir()` on Windows.
-///
-/// @return `true` if `name` is a directory and executable.
-bool os_isdir_executable(const char *name)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int32_t mode = os_getperm(name);
-  if (mode < 0) {
-    return false;
-  }
-
-#ifdef WIN32
-  return (S_ISDIR(mode));
-#else
-  return (S_ISDIR(mode) && (S_IXUSR & mode));
-#endif
-}
-
 /// Check what `name` is:
 /// @return NODE_NORMAL: file or directory (or doesn't exist)
 ///         NODE_WRITABLE: writable device, socket, fifo, etc.
@@ -170,7 +151,7 @@ bool os_isdir_executable(const char *name)
 int os_nodetype(const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifndef WIN32  // Unix
+#ifndef MSWIN  // Unix
   uv_stat_t statbuf;
   if (0 != os_stat(name, &statbuf)) {
     return NODE_NORMAL;  // File doesn't exist.
@@ -260,7 +241,7 @@ bool os_can_exe(const char *name, char **abspath, bool use_path)
   FUNC_ATTR_NONNULL_ARG(1)
 {
   if (!use_path || gettail_dir(name) != name) {
-#ifdef WIN32
+#ifdef MSWIN
     if (is_executable_ext(name, abspath)) {
 #else
     // Must have path separator, cannot execute files in the current directory.
@@ -289,7 +270,7 @@ static bool is_executable(const char *name, char **abspath)
     return false;
   }
 
-#ifdef WIN32
+#ifdef MSWIN
   // Windows does not have exec bit; just check if the file exists and is not
   // a directory.
   const bool ok = S_ISREG(mode);
@@ -306,7 +287,7 @@ static bool is_executable(const char *name, char **abspath)
   return ok;
 }
 
-#ifdef WIN32
+#ifdef MSWIN
 /// Checks if file `name` is executable under any of these conditions:
 /// - extension is in $PATHEXT and `name` is executable
 /// - result of any $PATHEXT extension appended to `name` is executable
@@ -339,7 +320,7 @@ static bool is_executable_ext(const char *name, char **abspath)
 
     const char *ext_end = ext;
     size_t ext_len =
-      copy_option_part((char_u **)&ext_end, (char_u *)buf_end,
+      copy_option_part(&ext_end, (char_u *)buf_end,
                        sizeof(os_buf) - (size_t)(buf_end - os_buf), ENV_SEPSTR);
     if (ext_len != 0) {
       bool in_pathext = nameext_len == ext_len
@@ -370,7 +351,7 @@ static bool is_executable_in_path(const char *name, char **abspath)
     return false;
   }
 
-#ifdef WIN32
+#ifdef MSWIN
   // Prepend ".;" to $PATH.
   size_t pathlen = strlen(path_env);
   char *path = memcpy(xmallocz(pathlen + 2), "." ENV_SEPSTR, 2);
@@ -393,7 +374,7 @@ static bool is_executable_in_path(const char *name, char **abspath)
     STRLCPY(buf, p, e - p + 1);
     append_path(buf, name, buf_len);
 
-#ifdef WIN32
+#ifdef MSWIN
     if (is_executable_ext(buf, abspath)) {
 #else
     if (is_executable(buf, abspath)) {
@@ -465,7 +446,7 @@ FILE *os_fopen(const char *path, const char *flags)
     default:
       abort();
     }
-#ifdef WIN32
+#ifdef MSWIN
     if (flags[1] == 'b') {
       iflags |= O_BINARY;
     }
@@ -791,6 +772,27 @@ int os_setperm(const char *const name, int perm)
   return (r == kLibuvSuccess ? OK : FAIL);
 }
 
+#ifdef UNIX
+/// Checks if the current user owns a file.
+///
+/// Uses both uv_fs_stat() and uv_fs_lstat() via os_fileinfo() and
+/// os_fileinfo_link() respectively for extra security.
+bool os_file_owned(const char *fname)
+  FUNC_ATTR_NONNULL_ALL
+{
+  uid_t uid = getuid();
+  FileInfo finfo;
+  bool file_owned = os_fileinfo(fname, &finfo) && finfo.stat.st_uid == uid;
+  bool link_owned = os_fileinfo_link(fname, &finfo) && finfo.stat.st_uid == uid;
+  return file_owned && link_owned;
+}
+#else
+bool os_file_owned(const char *fname)
+{
+  return true;  // TODO(justinmk): Windows. #8244
+}
+#endif
+
 /// Changes the owner and group of a file, like chown(2).
 ///
 /// @return 0 on success, or libuv error code on failure.
@@ -819,10 +821,10 @@ int os_fchown(int fd, uv_uid_t owner, uv_gid_t group)
 /// Check if a path exists.
 ///
 /// @return `true` if `path` exists
-bool os_path_exists(const char_u *path)
+bool os_path_exists(const char *path)
 {
   uv_stat_t statbuf;
-  return os_stat((char *)path, &statbuf) == kLibuvSuccess;
+  return os_stat(path, &statbuf) == kLibuvSuccess;
 }
 
 /// Sets file access and modification times.
@@ -863,7 +865,7 @@ int os_file_is_writable(const char *name)
   int r;
   RUN_UV_FS_FUNC(r, uv_fs_access, name, W_OK, NULL);
   if (r == 0) {
-    return os_isdir((char_u *)name) ? 2 : 1;
+    return os_isdir(name) ? 2 : 1;
   }
   return 0;
 }
@@ -909,12 +911,12 @@ int os_mkdir_recurse(const char *const dir, int32_t mode, char **const failed_di
   // We're done when it's "/" or "c:/".
   const size_t dirlen = strlen(dir);
   char *const curdir = xmemdupz(dir, dirlen);
-  char *const past_head = (char *)get_past_head((char_u *)curdir);
+  char *const past_head = get_past_head(curdir);
   char *e = curdir + dirlen;
   const char *const real_end = e;
   const char past_head_save = *past_head;
-  while (!os_isdir((char_u *)curdir)) {
-    e = (char *)path_tail_with_sep((char_u *)curdir);
+  while (!os_isdir(curdir)) {
+    e = path_tail_with_sep(curdir);
     if (e <= past_head) {
       *past_head = NUL;
       break;
@@ -1030,7 +1032,7 @@ int os_remove(const char *path)
 bool os_fileinfo(const char *path, FileInfo *file_info)
   FUNC_ATTR_NONNULL_ARG(2)
 {
-  memset(file_info, 0, sizeof(*file_info));
+  CLEAR_POINTER(file_info);
   return os_stat(path, &(file_info->stat)) == kLibuvSuccess;
 }
 
@@ -1042,7 +1044,7 @@ bool os_fileinfo(const char *path, FileInfo *file_info)
 bool os_fileinfo_link(const char *path, FileInfo *file_info)
   FUNC_ATTR_NONNULL_ARG(2)
 {
-  memset(file_info, 0, sizeof(*file_info));
+  CLEAR_POINTER(file_info);
   if (path == NULL) {
     return false;
   }
@@ -1066,7 +1068,7 @@ bool os_fileinfo_fd(int file_descriptor, FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
   uv_fs_t request;
-  memset(file_info, 0, sizeof(*file_info));
+  CLEAR_POINTER(file_info);
   fs_loop_lock();
   bool ok = uv_fs_fstat(&fs_loop,
                         &request,
@@ -1206,7 +1208,7 @@ char *os_realpath(const char *name, char *buf)
   return result == kLibuvSuccess ? buf : NULL;
 }
 
-#ifdef WIN32
+#ifdef MSWIN
 # include <shlobj.h>
 
 /// When "fname" is the name of a shortcut (*.lnk) resolve the file it points

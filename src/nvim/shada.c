@@ -11,21 +11,22 @@
 #include <string.h>
 #include <uv.h>
 
+#include "klib/khash.h"
+#include "klib/kvec.h"
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/ascii.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
+#include "nvim/cmdhist.h"
 #include "nvim/eval/decode.h"
 #include "nvim/eval/encode.h"
 #include "nvim/eval/typval.h"
+#include "nvim/ex_cmds.h"
 #include "nvim/ex_docmd.h"
-#include "nvim/ex_getln.h"
 #include "nvim/fileio.h"
 #include "nvim/garray.h"
 #include "nvim/globals.h"
-#include "nvim/lib/khash.h"
-#include "nvim/lib/kvec.h"
 #include "nvim/macros.h"
 #include "nvim/mark.h"
 #include "nvim/memory.h"
@@ -751,7 +752,7 @@ static int open_shada_file_for_reading(const char *const fname, ShaDaReadDef *sd
     return error;
   }
 
-  assert(STRCMP(p_enc, "utf-8") == 0);
+  assert(strcmp(p_enc, "utf-8") == 0);
 
   return 0;
 }
@@ -881,10 +882,10 @@ static const void *shada_hist_iter(const void *const iter, const uint8_t history
       .data = {
         .history_item = {
           .histtype = history_type,
-          .string = (char *)hist_he.hisstr,
+          .string = hist_he.hisstr,
           .sep = (char)(history_type == HIST_SEARCH
-                         ? (char)hist_he.hisstr[STRLEN(hist_he.hisstr) + 1]
-                         : 0),
+                        ? hist_he.hisstr[strlen(hist_he.hisstr) + 1]
+                        : 0),
           .additional_elements = hist_he.additional_elements,
         }
       }
@@ -1007,7 +1008,7 @@ static inline void hms_to_he_array(const HistoryMergerState *const hms_p,
   HMLL_FORALL(&hms_p->hmll, cur_entry,  {
     hist->timestamp = cur_entry->data.timestamp;
     hist->hisnum = (int)(hist - hist_array) + 1;
-    hist->hisstr = (char_u *)cur_entry->data.data.history_item.string;
+    hist->hisstr = cur_entry->data.data.history_item.string;
     hist->additional_elements =
       cur_entry->data.data.history_item.additional_elements;
     hist++;
@@ -1052,7 +1053,7 @@ static buf_T *find_buffer(khash_t(fnamebufs) *const fname_bufs, const char *cons
   kh_key(fname_bufs, k) = xstrdup(fname);
   FOR_ALL_BUFFERS(buf) {
     if (buf->b_ffname != NULL) {
-      if (FNAMECMP(fname, buf->b_ffname) == 0) {
+      if (path_fnamecmp(fname, buf->b_ffname) == 0) {
         kh_val(fname_bufs, k) = buf;
         return buf;
       }
@@ -1237,7 +1238,7 @@ static void shada_read(ShaDaReadDef *const sd_reader, const int flags)
       // string is close to useless: you can only use it with :& or :~ and
       // that’s all because s//~ is not available until the first call to
       // regtilde. Vim was not calling this for some reason.
-      (void)(char *)regtilde((char_u *)cur_entry.data.sub_string.sub, p_magic, false);
+      (void)regtilde(cur_entry.data.sub_string.sub, p_magic, false);
       // Do not free shada entry: its allocated memory was saved above.
       break;
     case kSDItemHistoryEntry:
@@ -1312,9 +1313,9 @@ static void shada_read(ShaDaReadDef *const sd_reader, const int flags)
         MERGE_JUMPS(curwin->w_jumplistlen, curwin->w_jumplist, xfmark_T,
                     fmark.timestamp, fmark.mark, cur_entry,
                     (buf == NULL
-                       ? (jl_entry.fname != NULL
-                          && STRCMP(fm.fname, jl_entry.fname) == 0)
-                       : fm.fmark.fnum == jl_entry.fmark.fnum),
+                     ? (jl_entry.fname != NULL
+                        && strcmp(fm.fname, jl_entry.fname) == 0)
+                     : fm.fmark.fnum == jl_entry.fmark.fnum),
                     free_xfmark, SDE_TO_XFMARK, ADJUST_IDX, DUMMY_AFTERFREE);
 #undef SDE_TO_XFMARK
 #undef ADJUST_IDX
@@ -1328,11 +1329,11 @@ static void shada_read(ShaDaReadDef *const sd_reader, const int flags)
         char *const sfname =
           (char *)path_try_shorten_fname((char_u *)cur_entry.data.buffer_list.buffers[i].fname);
         buf_T *const buf =
-          buflist_new((char_u *)cur_entry.data.buffer_list.buffers[i].fname, (char_u *)sfname, 0,
-                      BLN_LISTED);
+          buflist_new(cur_entry.data.buffer_list.buffers[i].fname, sfname, 0, BLN_LISTED);
         if (buf != NULL) {
+          fmarkv_T view = INIT_FMARKV;
           RESET_FMARK(&buf->b_last_cursor,
-                      cur_entry.data.buffer_list.buffers[i].pos, 0);
+                      cur_entry.data.buffer_list.buffers[i].pos, 0, view);
           buflist_setfpos(buf, curwin, buf->b_last_cursor.mark.lnum,
                           buf->b_last_cursor.mark.col, false);
           buf->additional_data =
@@ -1476,7 +1477,7 @@ static char *shada_filename(const char *file)
       //     because various expansions must have already be done by the shell.
       //     If shell is not performing them then they should be done in main.c
       //     where arguments are parsed, *not here*.
-      expand_env((char_u *)file, &(NameBuff[0]), MAXPATHL);
+      expand_env((char *)file, &(NameBuff[0]), MAXPATHL);
       file = (const char *)&(NameBuff[0]);
     }
   }
@@ -2188,7 +2189,7 @@ static inline ShaDaWriteResult shada_read_when_writing(ShaDaReadDef *const sd_re
       k = kh_put(file_marks, &wms->file_marks, fname, &kh_ret);
       FileMarks *const filemarks = &kh_val(&wms->file_marks, k);
       if (kh_ret > 0) {
-        memset(filemarks, 0, sizeof(*filemarks));
+        CLEAR_POINTER(filemarks);
       }
       if (entry.timestamp > filemarks->greatest_timestamp) {
         filemarks->greatest_timestamp = entry.timestamp;
@@ -2306,7 +2307,7 @@ static inline ShadaEntry shada_get_buflist(khash_t(bufset) *const removable_bufs
     }
     buflist_entry.data.buffer_list.buffers[i] = (struct buffer_list_buffer) {
       .pos = buf->b_last_cursor.mark,
-      .fname = (char *)buf->b_ffname,
+      .fname = buf->b_ffname,
       .additional_data = buf->additional_data,
     };
     i++;
@@ -2444,11 +2445,32 @@ static inline void replace_numbered_mark(WriteMergerState *const wms, const size
 static inline void find_removable_bufs(khash_t(bufset) *removable_bufs)
 {
   FOR_ALL_BUFFERS(buf) {
-    if (buf->b_ffname != NULL && shada_removable((char *)buf->b_ffname)) {
+    if (buf->b_ffname != NULL && shada_removable(buf->b_ffname)) {
       int kh_ret;
       (void)kh_put(bufset, removable_bufs, (uintptr_t)buf, &kh_ret);
     }
   }
+}
+
+/// Translate a history type number to the associated character
+static int hist_type2char(const int type)
+  FUNC_ATTR_CONST
+{
+  switch (type) {
+  case HIST_CMD:
+    return ':';
+  case HIST_SEARCH:
+    return '/';
+  case HIST_EXPR:
+    return '=';
+  case HIST_INPUT:
+    return '@';
+  case HIST_DEBUG:
+    return '>';
+  default:
+    abort();
+  }
+  return NUL;
 }
 
 /// Write ShaDa file
@@ -2730,7 +2752,7 @@ static ShaDaWriteResult shada_write(ShaDaWriteDef *const sd_writer, ShaDaReadDef
       k = kh_put(file_marks, &wms->file_marks, fname, &kh_ret);
       FileMarks *const filemarks = &kh_val(&wms->file_marks, k);
       if (kh_ret > 0) {
-        memset(filemarks, 0, sizeof(*filemarks));
+        CLEAR_POINTER(filemarks);
       }
       do {
         fmark_T fm;
@@ -2803,7 +2825,7 @@ static ShaDaWriteResult shada_write(ShaDaWriteDef *const sd_writer, ShaDaReadDef
             .mark = curwin->w_cursor,
             .name = '0',
             .additional_data = NULL,
-            .fname = (char *)curbuf->b_ffname,
+            .fname = curbuf->b_ffname,
           }
         }
       },
@@ -2997,11 +3019,11 @@ shada_write_file_open: {}
   }
   if (nomerge) {
 shada_write_file_nomerge: {}
-    char *const tail = (char *)path_tail_with_sep((char_u *)fname);
+    char *const tail = path_tail_with_sep(fname);
     if (tail != fname) {
       const char tail_save = *tail;
       *tail = NUL;
-      if (!os_isdir((char_u *)fname)) {
+      if (!os_isdir(fname)) {
         int ret;
         char *failed_dir;
         if ((ret = os_mkdir_recurse(fname, 0700, &failed_dir)) != 0) {
@@ -3076,7 +3098,7 @@ shada_write_file_nomerge: {}
         }
       }
 #endif
-      if (vim_rename((char_u *)tempname, (char_u *)fname) == -1) {
+      if (vim_rename(tempname, fname) == -1) {
         semsg(_(RNERR "Can't rename ShaDa file from %s to %s!"),
               tempname, fname);
       } else {
@@ -3456,7 +3478,7 @@ shada_read_next_item_start:
   // data union are NULL so they are safe to xfree(). This is needed in case
   // somebody calls goto shada_read_next_item_error before anything is set in
   // the switch.
-  memset(entry, 0, sizeof(*entry));
+  CLEAR_POINTER(entry);
   if (sd_reader->eof) {
     return kSDReadStatusFinished;
   }
@@ -3973,13 +3995,13 @@ static bool shada_removable(const char *name)
   char part[MAXPATHL + 1];
   bool retval = false;
 
-  char *new_name = (char *)home_replace_save(NULL, (char_u *)name);
-  for (p = (char *)p_shada; *p;) {
-    (void)copy_option_part((char_u **)&p, (char_u *)part, ARRAY_SIZE(part), ", ");
+  char *new_name = home_replace_save(NULL, (char *)name);
+  for (p = p_shada; *p;) {
+    (void)copy_option_part(&p, part, ARRAY_SIZE(part), ", ");
     if (part[0] == 'r') {
-      home_replace(NULL, (char_u *)(part + 1), (char_u *)NameBuff, MAXPATHL, true);
-      size_t n = STRLEN(NameBuff);
-      if (mb_strnicmp((char_u *)NameBuff, (char_u *)new_name, n) == 0) {
+      home_replace(NULL, part + 1, (char *)NameBuff, MAXPATHL, true);
+      size_t n = strlen(NameBuff);
+      if (mb_strnicmp(NameBuff, new_name, n) == 0) {
         retval = true;
         break;
       }
@@ -4025,8 +4047,7 @@ static inline size_t shada_init_jumps(PossiblyFreedShadaEntry *jumps,
       continue;
     }
     const char *const fname =
-      (char *)(fm.fmark.fnum ==
-               0 ? (fm.fname == NULL ? NULL : (char_u *)fm.fname) : buf ? buf->b_ffname : NULL);
+      (fm.fmark.fnum == 0 ? (fm.fname == NULL ? NULL : fm.fname) : buf ? buf->b_ffname : NULL);
     if (fname == NULL) {
       continue;
     }

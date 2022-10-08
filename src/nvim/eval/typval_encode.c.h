@@ -1,3 +1,5 @@
+// uncrustify:off
+
 /// @file eval/typval_encode.c.h
 ///
 /// Contains set of macros used to convert (possibly recursive) typval_T into
@@ -248,7 +250,7 @@
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_encode.h"
 #include "nvim/func_attr.h"
-#include "nvim/lib/kvec.h"
+#include "klib/kvec.h"
 
 // -V::1063
 

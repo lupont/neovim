@@ -37,7 +37,7 @@
 "
 " For neovim compatibility, the vim specific calls were replaced with neovim
 " specific calls:
-"   term_start -> term_open
+"   term_start -> termopen
 "   term_sendkeys -> chansend
 "   term_getline -> getbufline
 "   job_info && term_getjob -> using linux command ps to get the tty
@@ -902,6 +902,26 @@ func s:InstallCommands()
     nnoremap K :Evaluate<CR>
   endif
 
+  if has('menu') && &mouse != ''
+    call s:InstallWinbar()
+
+    let popup = 1
+    if exists('g:termdebug_config')
+      let popup = get(g:termdebug_config, 'popup', 1)
+    elseif exists('g:termdebug_popup')
+      let popup = g:termdebug_popup
+    endif
+    if popup
+      let s:saved_mousemodel = &mousemodel
+      let &mousemodel = 'popup_setpos'
+      an 1.200 PopUp.-SEP3-	<Nop>
+      an 1.210 PopUp.Set\ breakpoint	:Break<CR>
+      an 1.220 PopUp.Clear\ breakpoint	:Clear<CR>
+      an 1.230 PopUp.Run\ until		:Until<CR>
+      an 1.240 PopUp.Evaluate		:Evaluate<CR>
+    endif
+  endif
+
   let &cpo = save_cpo
 endfunc
 
@@ -944,16 +964,36 @@ func s:DeleteCommands()
       nunmap K
     else
       " call mapset(s:k_map_saved)
-      let mode = s:k_map_saved.mode !=# ' ' ? s:k_map_saved.mode : ''
-      call nvim_set_keymap(mode, 'K', s:k_map_saved.rhs, {
-        \ 'expr': s:k_map_saved.expr ? v:true : v:false,
-        \ 'noremap': s:k_map_saved.noremap ? v:true : v:false,
-        \ 'nowait': s:k_map_saved.nowait ? v:true : v:false,
-        \ 'script': s:k_map_saved.script ? v:true : v:false,
-        \ 'silent': s:k_map_saved.silent ? v:true : v:false,
-        \ })
+      call mapset('n', 0, s:k_map_saved)
     endif
     unlet s:k_map_saved
+  endif
+
+  if has('menu')
+    " Remove the WinBar entries from all windows where it was added.
+    " let curwinid = win_getid(winnr())
+    " for winid in s:winbar_winids
+    "   if win_gotoid(winid)
+    "     aunmenu WinBar.Step
+    "     aunmenu WinBar.Next
+    "     aunmenu WinBar.Finish
+    "     aunmenu WinBar.Cont
+    "     aunmenu WinBar.Stop
+    "     aunmenu WinBar.Eval
+    "   endif
+    " endfor
+    " call win_gotoid(curwinid)
+    " let s:winbar_winids = []
+
+    if exists('s:saved_mousemodel')
+      let &mousemodel = s:saved_mousemodel
+      unlet s:saved_mousemodel
+      aunmenu PopUp.-SEP3-
+      aunmenu PopUp.Set\ breakpoint
+      aunmenu PopUp.Clear\ breakpoint
+      aunmenu PopUp.Run\ until
+      aunmenu PopUp.Evaluate
+    endif
   endif
 
   call sign_unplace('TermDebug')

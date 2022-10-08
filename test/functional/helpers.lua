@@ -29,6 +29,7 @@ local module = {
 }
 
 local start_dir = lfs.currentdir()
+local runtime_set = 'set runtimepath^=./build/lib/nvim/'
 module.nvim_prog = (
   os.getenv('NVIM_PRG')
   or global_helpers.test_build_dir .. '/bin/nvim'
@@ -40,6 +41,8 @@ module.nvim_set = (
   ..' belloff= wildoptions-=pum joinspaces noshowcmd noruler nomore redrawdebug=invalid')
 module.nvim_argv = {
   module.nvim_prog, '-u', 'NONE', '-i', 'NONE',
+  -- XXX: find treesitter parsers.
+  '--cmd', runtime_set,
   '--cmd', module.nvim_set,
   '--cmd', 'mapclear',
   '--cmd', 'mapclear!',
@@ -244,10 +247,12 @@ function module.run_session(lsession, request_cb, notification_cb, setup_cb, tim
     last_error = nil
     error(err)
   end
+
+  return session.eof_err
 end
 
 function module.run(request_cb, notification_cb, setup_cb, timeout)
-  module.run_session(session, request_cb, notification_cb, setup_cb, timeout)
+  return module.run_session(session, request_cb, notification_cb, setup_cb, timeout)
 end
 
 function module.stop()
@@ -271,10 +276,22 @@ function module.command(cmd)
 end
 
 
--- use for commands which expect nvim to quit
-function module.expect_exit(...)
-  eq("EOF was received from Nvim. Likely the Nvim process crashed.",
-     module.pcall_err(...))
+-- Use for commands which expect nvim to quit.
+-- The first argument can also be a timeout.
+function module.expect_exit(fn_or_timeout, ...)
+  local eof_err_msg = 'EOF was received from Nvim. Likely the Nvim process crashed.'
+  if type(fn_or_timeout) == 'function' then
+    eq(eof_err_msg, module.pcall_err(fn_or_timeout, ...))
+  else
+    eq(eof_err_msg, module.pcall_err(function(timeout, fn, ...)
+      fn(...)
+      while session:next_message(timeout) do
+      end
+      if session.eof_err then
+        error(session.eof_err[2])
+      end
+    end, fn_or_timeout, ...))
+  end
 end
 
 -- Evaluates a VimL expression.
@@ -331,14 +348,17 @@ end
 
 --  Removes Nvim startup args from `args` matching items in `args_rm`.
 --
---  "-u", "-i", "--cmd" are treated specially: their "values" are also removed.
+--  - Special case: "-u", "-i", "--cmd" are treated specially: their "values" are also removed.
+--  - Special case: "runtimepath" will remove only { '--cmd', 'set runtimepath^=…', }
+--
 --  Example:
 --      args={'--headless', '-u', 'NONE'}
 --      args_rm={'--cmd', '-u'}
 --  Result:
 --      {'--headless'}
 --
---  All cases are removed.
+--  All matching cases are removed.
+--
 --  Example:
 --      args={'--cmd', 'foo', '-N', '--cmd', 'bar'}
 --      args_rm={'--cmd', '-u'}
@@ -359,6 +379,9 @@ local function remove_args(args, args_rm)
       last = ''
     elseif tbl_contains(args_rm, arg) then
       last = arg
+    elseif arg == runtime_set and tbl_contains(args_rm, 'runtimepath') then
+      table.remove(new_args)  -- Remove the preceding "--cmd".
+      last = ''
     else
       table.insert(new_args, arg)
     end
@@ -366,10 +389,23 @@ local function remove_args(args, args_rm)
   return new_args
 end
 
+function module.check_close(old_session)
+  local start_time = luv.now()
+  old_session:close()
+  luv.update_time()  -- Update cached value of luv.now() (libuv: uv_now()).
+  local end_time = luv.now()
+  local delta = end_time - start_time
+  if delta > 500 then
+    print("nvim took " .. delta .. " milliseconds to exit after last test\n"..
+          "This indicates a likely problem with the test even if it passed!\n")
+    io.stdout:flush()
+  end
+end
+
 --- @param io_extra used for stdin_fd, see :help ui-option
 function module.spawn(argv, merge, env, keep, io_extra)
   if session and not keep then
-    session:close()
+    module.check_close(session)
   end
 
   local child_stream = ChildProcessStream.spawn(
@@ -526,16 +562,16 @@ function module.set_shell_powershell(fake)
     assert(found)
   end
   local shell = found and (iswin() and 'powershell' or 'pwsh') or module.testprg('pwsh-test')
-  local set_encoding = '[Console]::InputEncoding=[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;'
+  local set_encoding = '[Console]::InputEncoding=[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new();'
   local cmd = set_encoding..'Remove-Item -Force '..table.concat(iswin()
-    and {'alias:cat', 'alias:echo', 'alias:sleep'}
+    and {'alias:cat', 'alias:echo', 'alias:sleep', 'alias:sort'}
     or  {'alias:echo'}, ',')..';'
   module.exec([[
     let &shell = ']]..shell..[['
     set shellquote= shellxquote=
     let &shellcmdflag = '-NoLogo -NoProfile -ExecutionPolicy RemoteSigned -Command ]]..cmd..[['
     let &shellpipe = '2>&1 | Out-File -Encoding UTF8 %s; exit $LastExitCode'
-    let &shellredir = '-RedirectStandardOutput %s -NoNewWindow -Wait'
+    let &shellredir = '2>&1 | Out-File -Encoding UTF8 %s; exit $LastExitCode'
   ]])
   return found
 end
@@ -739,15 +775,6 @@ function module.pending_win32(pending_fn)
   else
     return false
   end
-end
-
-function module.pending_c_parser(pending_fn)
-  local status, _ = unpack(module.exec_lua([[ return {pcall(vim.treesitter.require_language, 'c')} ]]))
-  if not status then
-    pending_fn 'no C parser, skipping'
-    return true
-  end
-  return false
 end
 
 -- Calls pending() and returns `true` if the system is too slow to

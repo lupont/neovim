@@ -181,16 +181,16 @@ Vim will only load the first syntax file found, assuming that it sets
 b:current_syntax.
 
 
-NAMING CONVENTIONS		    *group-name* *{group-name}* *E669* *W18*
+NAMING CONVENTIONS		    *group-name* *{group-name}* *E669* *E5248*
 
 A syntax group name is to be used for syntax items that match the same kind of
 thing.  These are then linked to a highlight group that specifies the color.
 A syntax group name doesn't specify any color or attributes itself.
 
-The name for a highlight or syntax group must consist of ASCII letters, digits
-and the underscore.  As a regexp: "[a-zA-Z0-9_]*".  However, Vim does not give
-an error when using other characters.  The maximum length of a group name is
-about 200 bytes.  *E1249*
+The name for a highlight or syntax group must consist of ASCII letters,
+digits, underscores, periods and `@` characters.  As a regexp it is
+`[a-zA-Z0-9_.@]*`. The maximum length of a group name is about 200 bytes.
+*E1249*
 
 To be able to allow each user to pick their favorite set of colors, there must
 be preferred names for highlight groups that are common for many languages.
@@ -1659,6 +1659,21 @@ because Fortran90 has no reserved words.
 For further information related to fortran, see |ft-fortran-indent| and
 |ft-fortran-plugin|.
 
+FREEBASIC				*freebasic.vim* *ft-freebasic-syntax*
+
+FreeBASIC files will be highlighted differently for each of the four available
+dialects, "fb", "qb", "fblite" and "deprecated".  See |ft-freebasic-plugin|
+for how to select the correct dialect.
+
+Highlighting is further configurable via the following variables.
+
+Variable			Highlight ~
+*freebasic_no_comment_fold*	disable multiline comment folding
+*freebasic_operators*		non-alpha operators
+*freebasic_space_errors*	trailing white space and spaces before a <Tab>
+*freebasic_type_suffixes*	QuickBASIC style type suffixes
+
+
 
 FVWM CONFIGURATION FILES			*fvwm.vim* *ft-fvwm-syntax*
 
@@ -2042,7 +2057,7 @@ The g:lisp_rainbow option provides 10 levels of individual colorization for
 the parentheses and backquoted parentheses.  Because of the quantity of
 colorization levels, unlike non-rainbow highlighting, the rainbow mode
 specifies its highlighting using ctermfg and guifg, thereby bypassing the
-usual colorscheme control using standard highlighting groups.  The actual
+usual color scheme control using standard highlighting groups.  The actual
 highlighting used depends on the dark/bright setting  (see |'bg'|).
 
 
@@ -2350,7 +2365,7 @@ you set the variable: >
 
 	:let papp_include_html=1
 
-in your startup file it will try to syntax-hilight html code inside phtml
+in your startup file it will try to syntax-highlight html code inside phtml
 sections, but this is relatively slow and much too colourful to be able to
 edit sensibly. ;)
 
@@ -3103,7 +3118,7 @@ The default is to use the twice sh_minlines.  Set it to a smaller number to
 speed up displaying.  The disadvantage is that highlight errors may appear.
 
 syntax/sh.vim tries to flag certain problems as errors; usually things like
-extra ']'s, 'done's, 'fi's, etc.  If you find the error handling problematic
+unmatched "]", "done", "fi", etc.  If you find the error handling problematic
 for your purposes, you may suppress such error highlighting by putting
 the following line in your .vimrc: >
 
@@ -4823,7 +4838,7 @@ in their own color.
 
 			To customize a color scheme use another name, e.g.
 			"~/.config/nvim/colors/mine.vim", and use `:runtime` to
-			load the original colorscheme: >
+			load the original color scheme: >
 				runtime colors/evening.vim
 				hi Statement ctermfg=Blue guifg=Blue
 
@@ -4831,7 +4846,7 @@ in their own color.
 			|ColorSchemePre| autocommand event is triggered.
 			After the color scheme has been loaded the
 			|ColorScheme| autocommand event is triggered.
-			For info about writing a colorscheme file: >
+			For info about writing a color scheme file: >
 				:edit $VIMRUNTIME/colors/README.txt
 
 :hi[ghlight]		List all the current highlight groups that have
@@ -4895,19 +4910,19 @@ the same syntax file on all UIs.
 
 1. TUI highlight arguments
 
-					*bold* *underline* *underlineline*
-					*undercurl* *underdot* *underdash*
-					*inverse* *italic* *standout*
-					*nocombine* *strikethrough*
+					*bold* *underline* *undercurl*
+					*underdouble* *underdotted*
+					*underdashed* *inverse* *italic*
+					*standout* *nocombine* *strikethrough*
 cterm={attr-list}			*attr-list* *highlight-cterm* *E418*
 	attr-list is a comma-separated list (without spaces) of the
 	following items (in any order):
 		bold
 		underline
-		underlineline	double underline
 		undercurl	curly underline
-		underdot	dotted underline
-		underdash	dashed underline
+		underdouble	double underline
+		underdotted	dotted underline
+		underdashed	dashed underline
 		strikethrough
 		reverse
 		inverse		same as reverse
@@ -4918,9 +4933,9 @@ cterm={attr-list}			*attr-list* *highlight-cterm* *E418*
 
 	Note that "bold" can be used here and by using a bold font.  They
 	have the same effect.
-	"underlineline", "undercurl", "underdot", and "underdash" fall back
+	"undercurl", "underdouble", "underdotted", and "underdashed" fall back
 	to "underline" in a terminal that does not support them. The color is
-	set using |highlight-guisp|.
+	set using |guisp|.
 
 start={term-list}				*highlight-start* *E422*
 stop={term-list}				*term-list* *highlight-stop*
@@ -4941,8 +4956,8 @@ stop={term-list}				*term-list* *highlight-stop*
         like "<Esc>" and "<Space>".  Example:
 		start=<Esc>[27h;<Esc>[<Space>r;
 
-ctermfg={color-nr}				*highlight-ctermfg* *E421*
-ctermbg={color-nr}				*highlight-ctermbg*
+ctermfg={color-nr}				*ctermfg* *E421*
+ctermbg={color-nr}				*ctermbg*
 	The {color-nr} argument is a color number.  Its range is zero to
 	(not including) the number of |tui-colors| available.
 	The actual color with this number depends on the type of terminal
@@ -5001,7 +5016,7 @@ ctermbg={color-nr}				*highlight-ctermbg*
 	explicitly.  This causes the highlight groups that depend on
 	'background' to change!  This means you should set the colors for
 	Normal first, before setting other colors.
-	When a colorscheme is being used, changing 'background' causes it to
+	When a color scheme is being used, changing 'background' causes it to
 	be reloaded, which may reset all colors (including Normal).  First
 	delete the "g:colors_name" variable when you don't want this.
 
@@ -5049,9 +5064,9 @@ font={font-name}					*highlight-font*
 	Example: >
 	    :hi comment font='Monospace 10'
 
-guifg={color-name}					*highlight-guifg*
-guibg={color-name}					*highlight-guibg*
-guisp={color-name}					*highlight-guisp*
+guifg={color-name}					*guifg*
+guibg={color-name}					*guibg*
+guisp={color-name}					*guisp*
 	These give the foreground (guifg), background (guibg) and special
 	(guisp) color to use in the GUI.  "guisp" is used for various
 	underlines.
@@ -5108,7 +5123,7 @@ Cursor		Character under the cursor.
 lCursor		Character under the cursor when |language-mapping|
 		is used (see 'guicursor').
 							*hl-CursorIM*
-CursorIM	Like Cursor, but used when in IME mode. |CursorIM|
+CursorIM	Like Cursor, but used when in IME mode. *CursorIM*
 							*hl-CursorColumn*
 CursorColumn	Screen-column at the cursor, when 'cursorcolumn' is set.
 							*hl-CursorLine*
@@ -5172,7 +5187,7 @@ ModeMsg		'showmode' message (e.g., "-- INSERT --").
 							*hl-MsgArea*
 MsgArea		Area for messages and cmdline.
 							*hl-MsgSeparator*
-MsgSeparator	Separator for scrolled messages, `msgsep` flag of 'display'.
+MsgSeparator	Separator for scrolled messages |msgsep|.
 							*hl-MoreMsg*
 MoreMsg		|more-prompt|
 							*hl-NonText*
@@ -5235,7 +5250,7 @@ TabLineSel	Tab pages line, active tab page label.
 Title		Titles for output from ":set all", ":autocmd" etc.
 							*hl-Visual*
 Visual		Visual mode selection.
- 							*hl-VisualNOS*
+							*hl-VisualNOS*
 VisualNOS	Visual mode selection when vim is "Not Owning the Selection".
 							*hl-WarningMsg*
 WarningMsg	Warning messages.

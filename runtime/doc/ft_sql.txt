@@ -244,7 +244,7 @@ key to complete the optional parameter.
 After typing the function name and a space, you can use the completion to
 supply a parameter.  The function takes the name of the Vim script you want to
 source.  Using the |cmdline-completion| feature, the SQLSetType function will
-search the |'runtimepath'| for all Vim scripts with a name containing 'sql'.
+search the |'runtimepath'| for all Vim scripts with a name containing "sql".
 This takes the guess work out of the spelling of the names.  The following are
 examples: >
     :SQLSetType
@@ -502,7 +502,7 @@ documentation.
 Assuming you have followed the dbext-tutorial you can press <C-C>t to
 display a list of tables.  There is a delay while dbext is creating the table
 list.  After the list is displayed press <C-W>.  This will remove both the
-popup window and the table name already chosen when the list became active. >
+popup window and the table name already chosen when the list became active.
 
  4.3.1 Table Completion:			*sql-completion-tables*
 
@@ -510,7 +510,7 @@ Press <C-C>t to display a list of tables from within the database you
 have connected via the dbext plugin.
 NOTE: All of the SQL completion popups support typing a prefix before pressing
 the key map.  This will limit the contents of the popup window to just items
-beginning with those characters.  >
+beginning with those characters.
 
  4.3.2 Column Completion:			*sql-completion-columns*
 
@@ -583,13 +583,13 @@ popup a list of columns for the customer table.  It does this by looking back
 to the beginning of the select statement and finding a list of the tables
 specified in the FROM clause.  In this case it notes that in the string
 "customer c", "c" is an alias for the customer table.  The optional "AS"
-keyword is also supported, "customer AS c". >
+keyword is also supported, "customer AS c".
 
 
  4.3.3 Procedure Completion:			*sql-completion-procedures*
 
 Similar to the table list, <C-C>p, will display a list of stored
-procedures stored within the database. >
+procedures stored within the database.
 
  4.3.4 View Completion:				*sql-completion-views*
 
@@ -757,7 +757,7 @@ the syntax items for Perl.
 
 Step 2
 ------
-Manually setting the filetype to 'sql' will also fire the appropriate filetype
+Manually setting the filetype to "sql" will also fire the appropriate filetype
 files ftplugin/sql.vim.  This file will define a number of buffer specific
 maps for SQL completion, see |sql-completion-maps|.  Now these maps have
 been created and the SQL completion plugin has been initialized.  All SQL

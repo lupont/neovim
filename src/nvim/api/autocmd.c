@@ -9,9 +9,9 @@
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/ascii.h"
+#include "nvim/autocmd.h"
 #include "nvim/buffer.h"
 #include "nvim/eval/typval.h"
-#include "nvim/fileio.h"
 #include "nvim/lua/executor.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
@@ -59,6 +59,9 @@ static int64_t next_autocmd_id = 1;
 ///             - group (string|integer): the autocommand group name or id to match against.
 ///             - event (string|array): event or events to match against |autocmd-events|.
 ///             - pattern (string|array): pattern or patterns to match against |autocmd-pattern|.
+///             Cannot be used with {buffer}
+///             - buffer: Buffer number or list of buffer numbers for buffer local autocommands
+///             |autocmd-buflocal|. Cannot be used with {pattern}
 /// @return Array of autocommands matching the criteria, with each item
 ///         containing the following fields:
 ///             - id (number): the autocommand id (only when defined with the API).
@@ -240,7 +243,7 @@ Array nvim_get_autocmds(Dict(get_autocmds) *opts, Error *err)
           assert(pattern_filters[i]);
 
           char *pat = pattern_filters[i];
-          int patlen = (int)STRLEN(pat);
+          int patlen = (int)strlen(pat);
 
           if (aupat_is_buflocal(pat, patlen)) {
             aupat_normalize_buflocal_pat(pattern_buflocal,
@@ -596,7 +599,7 @@ void nvim_del_autocmd(Integer id, Error *err)
 }
 
 /// Clear all autocommands that match the corresponding {opts}. To delete
-/// a particular autocmd, see |nvim_del_autocmd|.
+/// a particular autocmd, see |nvim_del_autocmd()|.
 /// @param opts Parameters
 ///         - event: (string|table)
 ///              Examples:
@@ -725,7 +728,7 @@ Integer nvim_create_augroup(uint64_t channel_id, String name, Dict(create_augrou
 ///
 /// To get a group id one can use |nvim_get_autocmds()|.
 ///
-/// NOTE: behavior differs from |augroup-delete|. When deleting a group, autocommands contained in
+/// NOTE: behavior differs from |:augroup-delete|. When deleting a group, autocommands contained in
 /// this group will also be deleted and cleared. This group will no longer exist.
 /// @param id Integer The id of the group.
 /// @see |nvim_del_augroup_by_name()|
@@ -743,10 +746,10 @@ void nvim_del_augroup_by_id(Integer id, Error *err)
 
 /// Delete an autocommand group by name.
 ///
-/// NOTE: behavior differs from |augroup-delete|. When deleting a group, autocommands contained in
+/// NOTE: behavior differs from |:augroup-delete|. When deleting a group, autocommands contained in
 /// this group will also be deleted and cleared. This group will no longer exist.
 /// @param name String The name of the group.
-/// @see |autocommand-groups|
+/// @see |autocmd-groups|
 void nvim_del_augroup_by_name(String name, Error *err)
   FUNC_API_SINCE(9)
 {
@@ -887,12 +890,12 @@ static bool check_autocmd_string_array(Array arr, char *k, Error *err)
 static bool unpack_string_or_array(Array *array, Object *v, char *k, bool required, Error *err)
 {
   if (v->type == kObjectTypeString) {
-    ADD(*array, copy_object(*v));
+    ADD(*array, copy_object(*v, NULL));
   } else if (v->type == kObjectTypeArray) {
     if (!check_autocmd_string_array(v->data.array, k, err)) {
       return false;
     }
-    *array = copy_array(v->data.array);
+    *array = copy_array(v->data.array, NULL);
   } else {
     if (required) {
       api_set_error(err,

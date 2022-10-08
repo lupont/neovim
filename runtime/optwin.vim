@@ -1,7 +1,7 @@
 " These commands create the option window.
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2022 Apr 07
+" Last Change:	2022 Oct 02
 
 " If there already is an option window, jump to that one.
 let buf = bufnr('option-window')
@@ -511,6 +511,8 @@ call append("$", "\tto a buffer")
 call <SID>OptionG("swb", &swb)
 call append("$", "splitbelow\ta new window is put below the current one")
 call <SID>BinOptionG("sb", &sb)
+call append("$", "splitkeep\ta determines scroll behavior for split windows")
+call <SID>BinOptionG("spk", &spk)
 call append("$", "splitright\ta new window is put right of the current one")
 call <SID>BinOptionG("spr", &spr)
 call append("$", "scrollbind\tthis window scrolls together with other bound windows")
@@ -665,12 +667,10 @@ if has("printer")
     call append("$", "printencoding\tencoding used to print the PostScript file for :hardcopy")
     call <SID>OptionG("penc", &penc)
   endif
-  if has("multi_byte")
-    call append("$", "printmbcharset\tthe CJK character set to be used for CJK output from :hardcopy")
-    call <SID>OptionG("pmbcs", &pmbcs)
-    call append("$", "printmbfont\tlist of font names to be used for CJK output from :hardcopy")
-    call <SID>OptionG("pmbfn", &pmbfn)
-  endif
+  call append("$", "printmbcharset\tthe CJK character set to be used for CJK output from :hardcopy")
+  call <SID>OptionG("pmbcs", &pmbcs)
+  call append("$", "printmbfont\tlist of font names to be used for CJK output from :hardcopy")
+  call <SID>OptionG("pmbfn", &pmbfn)
 endif
 
 call <SID>Header("messages and info")
@@ -981,11 +981,9 @@ call <SID>BinOptionL("eol")
 call append("$", "fixendofline\tfixes missing end-of-line at end of text file")
 call append("$", "\t(local to buffer)")
 call <SID>BinOptionL("fixeol")
-if has("multi_byte")
-  call append("$", "bomb\tprepend a Byte Order Mark to the file")
-  call append("$", "\t(local to buffer)")
-  call <SID>BinOptionL("bomb")
-endif
+call append("$", "bomb\tprepend a Byte Order Mark to the file")
+call append("$", "\t(local to buffer)")
+call <SID>BinOptionL("bomb")
 call append("$", "fileformat\tend-of-line format: \"dos\", \"unix\" or \"mac\"")
 call append("$", "\t(local to buffer)")
 call <SID>OptionL("ff")
@@ -1204,30 +1202,28 @@ if has("xim")
 endif
 
 
-if has("multi_byte")
-  call <SID>Header("multi-byte characters")
-  call <SID>AddOption("encoding", "character encoding used in Nvim: \"utf-8\"")
-  call <SID>OptionG("enc", &enc)
-  call append("$", "fileencoding\tcharacter encoding for the current file")
-  call append("$", "\t" .. s:local_to_buffer)
-  call <SID>OptionL("fenc")
-  call append("$", "fileencodings\tautomatically detected character encodings")
-  call <SID>OptionG("fencs", &fencs)
-  call append("$", "charconvert\texpression used for character encoding conversion")
-  call <SID>OptionG("ccv", &ccv)
-  call append("$", "delcombine\tdelete combining (composing) characters on their own")
-  call <SID>BinOptionG("deco", &deco)
-  call append("$", "maxcombine\tmaximum number of combining (composing) characters displayed")
-  call <SID>OptionG("mco", &mco)
-  if has("xim") && has("gui_gtk")
-    call append("$", "imactivatekey\tkey that activates the X input method")
-    call <SID>OptionG("imak", &imak)
-  endif
-  call append("$", "ambiwidth\twidth of ambiguous width characters")
-  call <SID>OptionG("ambw", &ambw)
-  call append("$", "emoji\temoji characters are full width")
-  call <SID>BinOptionG("emo", &emo)
+call <SID>Header("multi-byte characters")
+call <SID>AddOption("encoding", "character encoding used in Nvim: \"utf-8\"")
+call <SID>OptionG("enc", &enc)
+call append("$", "fileencoding\tcharacter encoding for the current file")
+call append("$", "\t" .. s:local_to_buffer)
+call <SID>OptionL("fenc")
+call append("$", "fileencodings\tautomatically detected character encodings")
+call <SID>OptionG("fencs", &fencs)
+call append("$", "charconvert\texpression used for character encoding conversion")
+call <SID>OptionG("ccv", &ccv)
+call append("$", "delcombine\tdelete combining (composing) characters on their own")
+call <SID>BinOptionG("deco", &deco)
+call append("$", "maxcombine\tmaximum number of combining (composing) characters displayed")
+call <SID>OptionG("mco", &mco)
+if has("xim") && has("gui_gtk")
+  call append("$", "imactivatekey\tkey that activates the X input method")
+  call <SID>OptionG("imak", &imak)
 endif
+call append("$", "ambiwidth\twidth of ambiguous width characters")
+call <SID>OptionG("ambw", &ambw)
+call append("$", "emoji\temoji characters are full width")
+call <SID>BinOptionG("emo", &emo)
 
 
 call <SID>Header("various")

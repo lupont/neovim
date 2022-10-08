@@ -57,7 +57,7 @@ The special pattern <buffer> or <buffer=N> defines a buffer-local autocommand.
 See |autocmd-buflocal|.
 
 Note: The ":autocmd" command can only be followed by another command when the
-'|' appears where the pattern is expected.  This works: >
+"|" appears where the pattern is expected.  This works: >
 	:augroup mine | au! BufRead | augroup END
 But this sees "augroup" as part of the defined command: >
 	:augroup mine | au! BufRead * | augroup END
@@ -412,6 +412,8 @@ CmdwinLeave			Before leaving the command-line window.
 				|cmdwin-char|
 							*ColorScheme*
 ColorScheme			After loading a color scheme. |:colorscheme|
+				Not triggered if the color scheme is not
+				found.
 				The pattern is matched against the
 				colorscheme name. <afile> can be used for the
 				name of the actual file where this option was
@@ -441,8 +443,8 @@ CompleteChanged 					*CompleteChanged*
 				Non-recursive (event cannot trigger itself).
 				Cannot change the text. |textlock|
 
-  				The size and position of the popup are also
- 				available by calling |pum_getpos()|.
+				The size and position of the popup are also
+				available by calling |pum_getpos()|.
 
 							*CompleteDonePre*
 CompleteDonePre			After Insert mode completion is done.  Either
@@ -588,6 +590,7 @@ FileChangedShell		When Vim notices that the modification time of
 				- executing a shell command
 				- |:checktime|
 				- |FocusGained| 
+
 				Not used when 'autoread' is set and the buffer
 				was not changed.  If a FileChangedShell
 				autocommand exists the warning message and
@@ -727,13 +730,14 @@ MenuPopup			Just before showing the popup menu (under the
 				right mouse button).  Useful for adjusting the
 				menu for what is under the cursor or mouse
 				pointer.
-				The pattern is matched against a single
-				character representing the mode:
+				The pattern is matched against one or two
+				characters representing the mode:
 					n	Normal
 					v	Visual
 					o	Operator-pending
 					i	Insert
 					c	Command line
+					tl	Terminal
 							*ModeChanged*
 ModeChanged			After changing the mode. The pattern is
 				matched against `'old_mode:new_mode'`, for
@@ -832,13 +836,13 @@ QuitPre				When using `:quit`, `:wq` or `:qall`, before
 				See also |ExitPre|, |WinClosed|.
 							*RemoteReply*
 RemoteReply			When a reply from a Vim that functions as
-				server was received |server2client()|.  The
+				server was received server2client().  The
 				pattern is matched against the {serverid}.
 				<amatch> is equal to the {serverid} from which
 				the reply was sent, and <afile> is the actual
 				reply string.
 				Note that even if an autocommand is defined,
-				the reply should be read with |remote_read()|
+				the reply should be read with remote_read()
 				to consume it.
 							*SearchWrapped*
 SearchWrapped			After making a search with |n| or |N| if the
@@ -1203,7 +1207,7 @@ still executed.
 
 ==============================================================================
 7. Buffer-local autocommands	*autocmd-buflocal* *autocmd-buffer-local*
-					*<buffer=N>* *<buffer=abuf>* *E680*
+				*<buffer>* *<buffer=N>* *<buffer=abuf>* *E680*
 
 Buffer-local autocommands are attached to a specific buffer.  They are useful
 if the buffer does not have a name and when the name does not match a specific

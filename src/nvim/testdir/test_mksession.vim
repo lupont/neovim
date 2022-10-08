@@ -2,9 +2,8 @@
 
 scriptencoding latin1
 
-if !has('mksession')
-  finish
-endif
+source check.vim
+CheckFeature mksession
 
 source shared.vim
 source term_util.vim
@@ -43,9 +42,9 @@ func Test_mksession()
     \   '    four leadinG spaces',
     \   'two		consecutive tabs',
     \   'two	tabs	in one line',
-    \   'one Ã¤ multibyteCharacter',
-    \   'aÃ¤ Ã„  two multiByte characters',
-    \   'AÃ¤Ã¶Ã¼  three mulTibyte characters',
+    \   'one ä multibyteCharacter',
+    \   'aä Ä  two multiByte characters',
+    \   'Aäöü  three mulTibyte characters',
     \   'short line',
     \ ])
   let tmpfile = 'Xtemp'
@@ -943,6 +942,19 @@ func Test_mkvimrc()
   endfor
 
   call s:ClearMappings()
+
+  " the 'pastetoggle', 'wildchar' and 'wildcharm' option values should be
+  " stored as key names in the vimrc file
+  set pastetoggle=<F5>
+  set wildchar=<F6>
+  set wildcharm=<F7>
+  call assert_fails('mkvimrc Xtestvimrc')
+  mkvimrc! Xtestvimrc
+  call assert_notequal(-1, index(readfile('Xtestvimrc'), 'set pastetoggle=<F5>'))
+  call assert_notequal(-1, index(readfile('Xtestvimrc'), 'set wildchar=<F6>'))
+  call assert_notequal(-1, index(readfile('Xtestvimrc'), 'set wildcharm=<F7>'))
+  set pastetoggle& wildchar& wildcharm&
+
   call delete('Xtestvimrc')
 endfunc
 

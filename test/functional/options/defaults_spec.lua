@@ -9,6 +9,7 @@ local clear = helpers.clear
 local exc_exec = helpers.exc_exec
 local eval = helpers.eval
 local eq = helpers.eq
+local ok = helpers.ok
 local funcs = helpers.funcs
 local insert = helpers.insert
 local iswin = helpers.iswin
@@ -160,6 +161,36 @@ describe('startup defaults', function()
         ~                        |~                       |
                                                           |
       ]])
+
+      -- change "vert" character to single-cell
+      funcs.setcellwidths({{0x2502, 0x2502, 1}})
+      screen:expect([[
+        1                        │1                       |
+        ^+--  2 lines: 2----------│+--  2 lines: 2---------|
+        4                        │4                       |
+        ~                        │~                       |
+                                                          |
+      ]])
+
+      -- change "vert" character to double-cell
+      funcs.setcellwidths({{0x2502, 0x2502, 2}})
+      screen:expect([[
+        1                        |1                       |
+        ^+--  2 lines: 2----------|+--  2 lines: 2---------|
+        4                        |4                       |
+        ~                        |~                       |
+                                                          |
+      ]])
+
+      -- "vert" character should still default to single-byte fillchars because of setcellwidths().
+      command('set ambiwidth=single')
+      screen:expect([[
+        1                        |1                       |
+        ^+--  2 lines: 2··········|+--  2 lines: 2·········|
+        4                        |4                       |
+        ~                        |~                       |
+                                                          |
+      ]])
     end)
   end)
 
@@ -189,7 +220,9 @@ describe('startup defaults', function()
   end)
 
   it("'packpath'", function()
-    clear()
+    clear{
+      args_rm={'runtimepath'},
+    }
     -- Defaults to &runtimepath.
     eq(meths.get_option('runtimepath'), meths.get_option('packpath'))
 
@@ -238,7 +271,7 @@ describe('startup defaults', function()
   end)
 end)
 
-describe('XDG-based defaults', function()
+describe('XDG defaults', function()
   -- Need separate describe() blocks to not run clear() twice.
   -- Do not put before_each() here for the same reasons.
 
@@ -282,6 +315,7 @@ describe('XDG-based defaults', function()
       eq('.', meths.get_option('viewdir'))
       eq('.', meths.get_option('directory'))
       eq('.', meths.get_option('undodir'))
+      ok((funcs.tempname()):len() > 4)
     end)
   end)
 
@@ -300,16 +334,19 @@ describe('XDG-based defaults', function()
 
   describe('with too long XDG variables', function()
     before_each(function()
-      clear({env={
-        XDG_CONFIG_HOME=(root_path .. ('/x'):rep(4096)),
-        XDG_CONFIG_DIRS=(root_path .. ('/a'):rep(2048)
-                         .. env_sep.. root_path .. ('/b'):rep(2048)
-                         .. (env_sep .. root_path .. '/c'):rep(512)),
-        XDG_DATA_HOME=(root_path .. ('/X'):rep(4096)),
-        XDG_STATE_HOME=(root_path .. ('/X'):rep(4096)),
-        XDG_DATA_DIRS=(root_path .. ('/A'):rep(2048)
-                       .. env_sep .. root_path .. ('/B'):rep(2048)
-                       .. (env_sep .. root_path .. '/C'):rep(512)),
+      clear({
+        args_rm={'runtimepath'},
+        env={
+          XDG_CONFIG_HOME=(root_path .. ('/x'):rep(4096)),
+          XDG_CONFIG_DIRS=(root_path .. ('/a'):rep(2048)
+                           .. env_sep.. root_path .. ('/b'):rep(2048)
+                           .. (env_sep .. root_path .. '/c'):rep(512)),
+          XDG_DATA_HOME=(root_path .. ('/X'):rep(4096)),
+          XDG_RUNTIME_DIR=(root_path .. ('/X'):rep(4096)),
+          XDG_STATE_HOME=(root_path .. ('/X'):rep(4096)),
+          XDG_DATA_DIRS=(root_path .. ('/A'):rep(2048)
+                         .. env_sep .. root_path .. ('/B'):rep(2048)
+                         .. (env_sep .. root_path .. '/C'):rep(512)),
       }})
     end)
 
@@ -372,12 +409,15 @@ describe('XDG-based defaults', function()
 
   describe('with XDG variables that can be expanded', function()
     before_each(function()
-      clear({env={
-        XDG_CONFIG_HOME='$XDG_DATA_HOME',
-        XDG_CONFIG_DIRS='$XDG_DATA_DIRS',
-        XDG_DATA_HOME='$XDG_CONFIG_HOME',
-        XDG_STATE_HOME='$XDG_CONFIG_HOME',
-        XDG_DATA_DIRS='$XDG_CONFIG_DIRS',
+      clear({
+        args_rm={'runtimepath'},
+        env={
+          XDG_CONFIG_HOME='$XDG_DATA_HOME',
+          XDG_CONFIG_DIRS='$XDG_DATA_DIRS',
+          XDG_DATA_HOME='$XDG_CONFIG_HOME',
+          XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR',
+          XDG_STATE_HOME='$XDG_CONFIG_HOME',
+          XDG_DATA_DIRS='$XDG_CONFIG_DIRS',
       }})
     end)
 
@@ -438,17 +478,20 @@ describe('XDG-based defaults', function()
           meths.get_option('undodir'):gsub('\\', '/'))
       eq(('$XDG_CONFIG_HOME/' .. state_dir .. '/view//'),
           meths.get_option('viewdir'):gsub('\\', '/'))
+      eq(nil, (funcs.tempname()):match('XDG_RUNTIME_DIR'))
     end)
   end)
 
   describe('with commas', function()
     before_each(function()
-      clear({env={
-        XDG_CONFIG_HOME=', , ,',
-        XDG_CONFIG_DIRS=',-,-,' .. env_sep .. '-,-,-',
-        XDG_DATA_HOME=',=,=,',
-        XDG_STATE_HOME=',=,=,',
-        XDG_DATA_DIRS=',≡,≡,' .. env_sep .. '≡,≡,≡',
+      clear({
+        args_rm={'runtimepath'},
+        env={
+          XDG_CONFIG_HOME=', , ,',
+          XDG_CONFIG_DIRS=',-,-,' .. env_sep .. '-,-,-',
+          XDG_DATA_HOME=',=,=,',
+          XDG_STATE_HOME=',=,=,',
+          XDG_DATA_DIRS=',≡,≡,' .. env_sep .. '≡,≡,≡',
       }})
     end)
 
@@ -519,6 +562,7 @@ describe('stdpath()', function()
     eq(statedir, funcs.fnamemodify(funcs.stdpath('state'), ':t'))
     eq('table', type(funcs.stdpath('config_dirs')))
     eq('table', type(funcs.stdpath('data_dirs')))
+    eq('string', type(funcs.stdpath('run')))
     assert_alive()  -- Check for crash. #8393
   end)
 

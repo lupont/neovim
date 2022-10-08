@@ -96,9 +96,9 @@ describe('clipboard', function()
       [0] = {bold = true, foreground = Screen.colors.Blue},
       [1] = {foreground = Screen.colors.Grey100, background = Screen.colors.Red},
       [2] = {bold = true, foreground = Screen.colors.SeaGreen4},
+      [3] = {bold = true, reverse = true};
     })
     screen:attach()
-    command("set display-=msgsep")
   end)
 
   it('unnamed register works without provider', function()
@@ -123,10 +123,10 @@ describe('clipboard', function()
     command("let g:clipboard = 'bogus'")
     feed_command('redir @+> | bogus_cmd | redir END')
     screen:expect{grid=[[
-      {0:~                                                                       }|
-      clipboard: No provider. Try ":checkhealth" or ":h clipboard".           |
-      {1:E492: Not an editor command: bogus_cmd | redir END}                      |
-      {2:Press ENTER or type command to continue}^                                 |
+    {3:                                                                        }|
+    clipboard: No provider. Try ":checkhealth" or ":h clipboard".           |
+    {1:E492: Not an editor command: bogus_cmd | redir END}                      |
+    {2:Press ENTER or type command to continue}^                                 |
     ]]}
   end)
 
@@ -310,18 +310,18 @@ describe('clipboard (with fake clipboard.vim)', function()
     insert([[
       text:
       first line
-      secound line
+      second line
       third line]])
 
     feed('G"+dd"*dddd"+p"*pp')
     expect([[
       text:
       third line
-      secound line
+      second line
       first line]])
     -- linewise selection should be encoded as an extra newline
     eq({{'third line', ''}, 'V'}, eval("g:test_clip['+']"))
-    eq({{'secound line', ''}, 'V'}, eval("g:test_clip['*']"))
+    eq({{'second line', ''}, 'V'}, eval("g:test_clip['*']"))
   end)
 
   it('handles null bytes when pasting and in getreg', function()
@@ -477,7 +477,7 @@ describe('clipboard (with fake clipboard.vim)', function()
       expect("indeed star")
     end)
 
-    it('unamed operations work even if the provider fails', function()
+    it('unnamed operations work even if the provider fails', function()
       insert('the text')
       feed('yy')
       feed_command("let g:cliperror = 1")
@@ -511,7 +511,7 @@ describe('clipboard (with fake clipboard.vim)', function()
       eq('textstar', meths.get_current_line())
     end)
 
-    it('Block paste works currectly', function()
+    it('Block paste works correctly', function()
       insert([[
         aabbcc
         ddeeff
@@ -559,7 +559,7 @@ describe('clipboard (with fake clipboard.vim)', function()
       eq({{'really unnamed', ''}, 'V'}, eval("g:test_clip['+']"))
       eq({{'really unnamed', ''}, 'V'}, eval("g:test_clip['*']"))
 
-      -- unnamedplus takes predecence when pasting
+      -- unnamedplus takes precedence when pasting
       eq('+', eval('v:register'))
       feed_command("let g:test_clip['+'] = ['the plus','']")
       feed_command("let g:test_clip['*'] = ['the star','']")

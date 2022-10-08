@@ -1,6 +1,7 @@
 local helpers = require('test.functional.helpers')(after_each)
 local Screen = require('test.functional.ui.screen')
 local lfs = require('lfs')
+local luv = require('luv')
 
 local fmt = string.format
 local assert_alive = helpers.assert_alive
@@ -14,6 +15,7 @@ local funcs = helpers.funcs
 local iswin = helpers.iswin
 local meths = helpers.meths
 local matches = helpers.matches
+local pesc = helpers.pesc
 local mkdir_p = helpers.mkdir_p
 local ok, nvim_async, feed = helpers.ok, helpers.nvim_async, helpers.feed
 local is_os = helpers.is_os
@@ -281,8 +283,8 @@ describe('API', function()
       ]]}
     end)
 
-    it('does\'t display messages when output=true', function()
-      local screen = Screen.new(40, 8)
+    it('doesn\'t display messages when output=true', function()
+      local screen = Screen.new(40, 6)
       screen:attach()
       screen:set_default_attr_ids({
         [0] = {bold=true, foreground=Screen.colors.Blue},
@@ -294,9 +296,21 @@ describe('API', function()
         {0:~                                       }|
         {0:~                                       }|
         {0:~                                       }|
-        {0:~                                       }|
-        {0:~                                       }|
                                                 |
+      ]]}
+      exec([[
+        func Print()
+          call nvim_exec('echo "hello"', v:true)
+        endfunc
+      ]])
+      feed([[:echon 1 | call Print() | echon 5<CR>]])
+      screen:expect{grid=[[
+        ^                                        |
+        {0:~                                       }|
+        {0:~                                       }|
+        {0:~                                       }|
+        {0:~                                       }|
+        15                                      |
       ]]}
     end)
   end)
@@ -1468,6 +1482,17 @@ describe('API', function()
       local win = nvim('get_current_win').id
       nvim('win_set_option', win, 'number', true)
       eq(true, nvim('get_option_value', 'number', {win = win}))
+    end)
+
+    it('getting current buffer option does not adjust cursor #19381', function()
+      nvim('command', 'new')
+      local buf = nvim('get_current_buf').id
+      local win = nvim('get_current_win').id
+      insert('some text')
+      feed('0v$')
+      eq({1, 9}, nvim('win_get_cursor', win))
+      nvim('get_option_value', 'filetype', {buf = buf})
+      eq({1, 9}, nvim('win_get_cursor', win))
     end)
   end)
 
@@ -2709,8 +2734,8 @@ describe('API', function()
 
     it('should have information about window options', function()
       eq({
-        allows_duplicates = true,
-        commalist = false;
+        allows_duplicates = false,
+        commalist = true;
         default = "";
         flaglist = false;
         global_local = false;
@@ -3153,9 +3178,6 @@ describe('API', function()
         cmd = 'echo',
         args = { 'foo' },
         bang = false,
-        range = {},
-        count = -1,
-        reg = '',
         addr = 'none',
         magic = {
             file = false,
@@ -3167,7 +3189,12 @@ describe('API', function()
           browse = false,
           confirm = false,
           emsg_silent = false,
+          filter = {
+              pattern = "",
+              force = false
+          },
           hide = false,
+          horizontal = false,
           keepalt = false,
           keepjumps = false,
           keepmarks = false,
@@ -3177,10 +3204,11 @@ describe('API', function()
           noswapfile = false,
           sandbox = false,
           silent = false,
-          vertical = false,
           split = "",
-          tab = 0,
-          verbose = -1
+          tab = -1,
+          unsilent = false,
+          verbose = -1,
+          vertical = false,
         }
       }, meths.parse_cmd('echo foo', {}))
     end)
@@ -3190,8 +3218,6 @@ describe('API', function()
         args = { '/math.random/math.max/' },
         bang = false,
         range = { 4, 6 },
-        count = -1,
-        reg = '',
         addr = 'line',
         magic = {
             file = false,
@@ -3203,7 +3229,12 @@ describe('API', function()
           browse = false,
           confirm = false,
           emsg_silent = false,
+          filter = {
+              pattern = "",
+              force = false
+          },
           hide = false,
+          horizontal = false,
           keepalt = false,
           keepjumps = false,
           keepmarks = false,
@@ -3213,10 +3244,11 @@ describe('API', function()
           noswapfile = false,
           sandbox = false,
           silent = false,
-          vertical = false,
           split = "",
-          tab = 0,
-          verbose = -1
+          tab = -1,
+          unsilent = false,
+          verbose = -1,
+          vertical = false,
         }
       }, meths.parse_cmd('4,6s/math.random/math.max/', {}))
     end)
@@ -3227,7 +3259,6 @@ describe('API', function()
         bang = false,
         range = { 1 },
         count = 1,
-        reg = '',
         addr = 'buf',
         magic = {
             file = false,
@@ -3239,7 +3270,12 @@ describe('API', function()
           browse = false,
           confirm = false,
           emsg_silent = false,
+          filter = {
+              pattern = "",
+              force = false
+          },
           hide = false,
+          horizontal = false,
           keepalt = false,
           keepjumps = false,
           keepmarks = false,
@@ -3249,10 +3285,11 @@ describe('API', function()
           noswapfile = false,
           sandbox = false,
           silent = false,
-          vertical = false,
           split = "",
-          tab = 0,
-          verbose = -1
+          tab = -1,
+          unsilent = false,
+          verbose = -1,
+          vertical = false,
         }
       }, meths.parse_cmd('buffer 1', {}))
     end)
@@ -3262,7 +3299,6 @@ describe('API', function()
         args = {},
         bang = false,
         range = {},
-        count = -1,
         reg = '+',
         addr = 'line',
         magic = {
@@ -3275,7 +3311,12 @@ describe('API', function()
           browse = false,
           confirm = false,
           emsg_silent = false,
+          filter = {
+              pattern = "",
+              force = false
+          },
           hide = false,
+          horizontal = false,
           keepalt = false,
           keepjumps = false,
           keepmarks = false,
@@ -3285,12 +3326,52 @@ describe('API', function()
           noswapfile = false,
           sandbox = false,
           silent = false,
-          vertical = false,
           split = "",
-          tab = 0,
-          verbose = -1
+          tab = -1,
+          unsilent = false,
+          verbose = -1,
+          vertical = false,
         }
       }, meths.parse_cmd('put +', {}))
+      eq({
+        cmd = 'put',
+        args = {},
+        bang = false,
+        range = {},
+        reg = '',
+        addr = 'line',
+        magic = {
+            file = false,
+            bar = true
+        },
+        nargs = '0',
+        nextcmd = '',
+        mods = {
+          browse = false,
+          confirm = false,
+          emsg_silent = false,
+          filter = {
+              pattern = "",
+              force = false
+          },
+          hide = false,
+          horizontal = false,
+          keepalt = false,
+          keepjumps = false,
+          keepmarks = false,
+          keeppatterns = false,
+          lockmarks = false,
+          noautocmd = false,
+          noswapfile = false,
+          sandbox = false,
+          silent = false,
+          split = "",
+          tab = -1,
+          unsilent = false,
+          verbose = -1,
+          vertical = false,
+        }
+      }, meths.parse_cmd('put', {}))
     end)
     it('works with range, count and register', function()
       eq({
@@ -3311,7 +3392,12 @@ describe('API', function()
           browse = false,
           confirm = false,
           emsg_silent = false,
+          filter = {
+              pattern = "",
+              force = false
+          },
           hide = false,
+          horizontal = false,
           keepalt = false,
           keepjumps = false,
           keepmarks = false,
@@ -3321,10 +3407,11 @@ describe('API', function()
           noswapfile = false,
           sandbox = false,
           silent = false,
-          vertical = false,
           split = "",
-          tab = 0,
-          verbose = -1
+          tab = -1,
+          unsilent = false,
+          verbose = -1,
+          vertical = false,
         }
       }, meths.parse_cmd('1,3delete * 5', {}))
     end)
@@ -3334,8 +3421,6 @@ describe('API', function()
         args = {},
         bang = true,
         range = {},
-        count = -1,
-        reg = '',
         addr = 'line',
         magic = {
             file = true,
@@ -3347,7 +3432,12 @@ describe('API', function()
           browse = false,
           confirm = false,
           emsg_silent = false,
+          filter = {
+              pattern = "",
+              force = false
+          },
           hide = false,
+          horizontal = false,
           keepalt = false,
           keepjumps = false,
           keepmarks = false,
@@ -3357,10 +3447,11 @@ describe('API', function()
           noswapfile = false,
           sandbox = false,
           silent = false,
-          vertical = false,
           split = "",
-          tab = 0,
-          verbose = -1
+          tab = -1,
+          unsilent = false,
+          verbose = -1,
+          vertical = false,
         },
       }, meths.parse_cmd('w!', {}))
     end)
@@ -3370,8 +3461,6 @@ describe('API', function()
         args = { 'foo.txt' },
         bang = false,
         range = {},
-        count = -1,
-        reg = '',
         addr = '?',
         magic = {
             file = true,
@@ -3383,7 +3472,12 @@ describe('API', function()
           browse = false,
           confirm = false,
           emsg_silent = true,
+          filter = {
+              pattern = "foo",
+              force = false
+          },
           hide = false,
+          horizontal = true,
           keepalt = false,
           keepjumps = false,
           keepmarks = false,
@@ -3393,12 +3487,51 @@ describe('API', function()
           noswapfile = false,
           sandbox = false,
           silent = true,
-          vertical = false,
           split = "topleft",
-          tab = 2,
-          verbose = 15
+          tab = 1,
+          unsilent = false,
+          verbose = 15,
+          vertical = false,
         },
-      }, meths.parse_cmd('15verbose silent! aboveleft topleft tab split foo.txt', {}))
+      }, meths.parse_cmd('15verbose silent! horizontal topleft tab filter /foo/ split foo.txt', {}))
+      eq({
+        cmd = 'split',
+        args = { 'foo.txt' },
+        bang = false,
+        range = {},
+        addr = '?',
+        magic = {
+            file = true,
+            bar = true
+        },
+        nargs = '?',
+        nextcmd = '',
+        mods = {
+          browse = false,
+          confirm = true,
+          emsg_silent = false,
+          filter = {
+              pattern = "foo",
+              force = true
+          },
+          hide = false,
+          horizontal = false,
+          keepalt = false,
+          keepjumps = false,
+          keepmarks = false,
+          keeppatterns = false,
+          lockmarks = false,
+          noautocmd = false,
+          noswapfile = false,
+          sandbox = false,
+          silent = false,
+          split = "botright",
+          tab = 0,
+          unsilent = true,
+          verbose = 0,
+          vertical = false,
+        },
+      }, meths.parse_cmd('0verbose unsilent botright 0tab confirm filter! /foo/ split foo.txt', {}))
     end)
     it('works with user commands', function()
       command('command -bang -nargs=+ -range -addr=lines MyCommand echo foo')
@@ -3407,8 +3540,6 @@ describe('API', function()
         args = { 'test', 'it' },
         bang = true,
         range = { 4, 6 },
-        count = -1,
-        reg = '',
         addr = 'line',
         magic = {
             file = false,
@@ -3420,7 +3551,12 @@ describe('API', function()
           browse = false,
           confirm = false,
           emsg_silent = false,
+          filter = {
+              pattern = "",
+              force = false
+          },
           hide = false,
+          horizontal = false,
           keepalt = false,
           keepjumps = false,
           keepmarks = false,
@@ -3430,10 +3566,11 @@ describe('API', function()
           noswapfile = false,
           sandbox = false,
           silent = false,
-          vertical = false,
           split = "",
-          tab = 0,
-          verbose = -1
+          tab = -1,
+          unsilent = false,
+          verbose = -1,
+          vertical = false,
         }
       }, meths.parse_cmd('4,6MyCommand! test it', {}))
     end)
@@ -3443,8 +3580,6 @@ describe('API', function()
         args = { 'a.txt' },
         bang = false,
         range = {},
-        count = -1,
-        reg = '',
         addr = 'arg',
         magic = {
             file = true,
@@ -3456,7 +3591,12 @@ describe('API', function()
           browse = false,
           confirm = false,
           emsg_silent = false,
+          filter = {
+              pattern = "",
+              force = false
+          },
           hide = false,
+          horizontal = false,
           keepalt = false,
           keepjumps = false,
           keepmarks = false,
@@ -3466,10 +3606,11 @@ describe('API', function()
           noswapfile = false,
           sandbox = false,
           silent = false,
-          vertical = false,
           split = "",
-          tab = 0,
-          verbose = -1
+          tab = -1,
+          unsilent = false,
+          verbose = -1,
+          vertical = false,
         }
       }, meths.parse_cmd('argadd a.txt | argadd b.txt', {}))
     end)
@@ -3479,9 +3620,6 @@ describe('API', function()
         cmd = 'MyCommand',
         args = { 'test it' },
         bang = false,
-        range = {},
-        count = -1,
-        reg = '',
         addr = 'none',
         magic = {
             file = false,
@@ -3493,7 +3631,12 @@ describe('API', function()
           browse = false,
           confirm = false,
           emsg_silent = false,
+          filter = {
+              pattern = "",
+              force = false
+          },
           hide = false,
+          horizontal = false,
           keepalt = false,
           keepjumps = false,
           keepmarks = false,
@@ -3503,10 +3646,11 @@ describe('API', function()
           noswapfile = false,
           sandbox = false,
           silent = false,
-          vertical = false,
           split = "",
-          tab = 0,
-          verbose = -1
+          tab = -1,
+          unsilent = false,
+          verbose = -1,
+          vertical = false,
         }
       }, meths.parse_cmd('MyCommand test it', {}))
     end)
@@ -3523,6 +3667,91 @@ describe('API', function()
       command('command! Foobar echo foo')
       eq('Error while parsing command line: E464: Ambiguous use of user-defined command',
          pcall_err(meths.parse_cmd, 'F', {}))
+    end)
+    it('does not interfere with printing line in Ex mode #19400', function()
+      local screen = Screen.new(60, 7)
+      screen:set_default_attr_ids({
+        [0] = {bold = true, foreground = Screen.colors.Blue},  -- NonText
+        [1] = {bold = true, reverse = true},  -- MsgSeparator
+      })
+      screen:attach()
+      insert([[
+        foo
+        bar]])
+      feed('gQ1')
+      screen:expect([[
+        foo                                                         |
+        bar                                                         |
+        {0:~                                                           }|
+        {0:~                                                           }|
+        {1:                                                            }|
+        Entering Ex mode.  Type "visual" to go to Normal mode.      |
+        :1^                                                          |
+      ]])
+      eq('Error while parsing command line', pcall_err(meths.parse_cmd, '', {}))
+      feed('<CR>')
+      screen:expect([[
+        foo                                                         |
+        bar                                                         |
+        {1:                                                            }|
+        Entering Ex mode.  Type "visual" to go to Normal mode.      |
+        :1                                                          |
+        foo                                                         |
+        :^                                                           |
+      ]])
+    end)
+    it('does not move cursor or change search history/pattern #19878 #19890', function()
+      meths.buf_set_lines(0, 0, -1, true, {'foo', 'bar', 'foo', 'bar'})
+      eq({1, 0}, meths.win_get_cursor(0))
+      eq('', funcs.getreg('/'))
+      eq('', funcs.histget('search'))
+      feed(':')  -- call the API in cmdline mode to test whether it changes search history
+      eq({
+        cmd = 'normal',
+        args = {'x'},
+        bang = true,
+        range = {3, 4},
+        addr = 'line',
+        magic = {
+          file = false,
+          bar = false,
+        },
+        nargs = '+',
+        nextcmd = '',
+        mods = {
+          browse = false,
+          confirm = false,
+          emsg_silent = false,
+          filter = {
+            pattern = "",
+            force = false,
+          },
+          hide = false,
+          horizontal = false,
+          keepalt = false,
+          keepjumps = false,
+          keepmarks = false,
+          keeppatterns = false,
+          lockmarks = false,
+          noautocmd = false,
+          noswapfile = false,
+          sandbox = false,
+          silent = false,
+          split = "",
+          tab = -1,
+          unsilent = false,
+          verbose = -1,
+          vertical = false,
+        }
+      }, meths.parse_cmd('+2;/bar/normal! x', {}))
+      eq({1, 0}, meths.win_get_cursor(0))
+      eq('', funcs.getreg('/'))
+      eq('', funcs.histget('search'))
+    end)
+    it('result can be used directly by nvim_cmd #20051', function()
+      eq("foo", meths.cmd(meths.parse_cmd('echo "foo"', {}), { output = true }))
+      meths.cmd(meths.parse_cmd("set cursorline", {}), {})
+      eq(true, meths.get_option_value("cursorline", {}))
     end)
   end)
   describe('nvim_cmd', function()
@@ -3601,9 +3830,32 @@ describe('API', function()
       eq("", meths.cmd({ cmd = "Foo", bang = false }, { output = true }))
     end)
     it('works with modifiers', function()
+      -- with :silent output is still captured
+      eq('1',
+         meths.cmd({ cmd = 'echomsg', args = { '1' }, mods = { silent = true } },
+                   { output = true }))
+      -- but message isn't added to message history
+      eq('', meths.cmd({ cmd = 'messages' }, { output = true }))
       meths.create_user_command("Foo", 'set verbose', {})
       eq("  verbose=1", meths.cmd({ cmd = "Foo", mods = { verbose = 1 } }, { output = true }))
+      meths.create_user_command("Mods", "echo '<mods>'", {})
+      eq('keepmarks keeppatterns silent 3verbose aboveleft horizontal',
+         meths.cmd({ cmd = "Mods", mods = {
+           horizontal = true,
+           keepmarks = true,
+           keeppatterns = true,
+           silent = true,
+           split = 'aboveleft',
+           verbose = 3,
+         } }, { output = true }))
       eq(0, meths.get_option_value("verbose", {}))
+      command('edit foo.txt | edit bar.txt')
+      eq('  1 #h   "foo.txt"                      line 1',
+         meths.cmd({ cmd = "buffers", mods = { filter = { pattern = "foo", force = false } } },
+                   { output = true }))
+      eq('  2 %a   "bar.txt"                      line 1',
+         meths.cmd({ cmd = "buffers", mods = { filter = { pattern = "foo", force = true } } },
+                   { output = true }))
     end)
     it('works with magic.file', function()
       exec_lua([[
@@ -3663,7 +3915,7 @@ describe('API', function()
       eq("foo", meths.cmd({ cmd = "Foo" }, { output = true }))
     end)
     it('errors if command is not implemented', function()
-      eq("Command not implemented: popup", pcall_err(meths.cmd, { cmd = "popup" }, {}))
+      eq("Command not implemented: winpos", pcall_err(meths.cmd, { cmd = "winpos" }, {}))
     end)
     it('works with empty arguments list', function()
       meths.cmd({ cmd = "update" }, {})
@@ -3676,6 +3928,80 @@ describe('API', function()
       ]], {})
       feed("[l")
       neq(nil, string.find(eval("v:errmsg"), "E5108:"))
+    end)
+    it('handles 0 range #19608', function()
+      meths.buf_set_lines(0, 0, -1, false, { "aa" })
+      meths.cmd({ cmd = 'delete', range = { 0 } }, {})
+      command('undo')
+      eq({'aa'}, meths.buf_get_lines(0, 0, 1, false))
+      assert_alive()
+    end)
+    it('supports filename expansion', function()
+      meths.cmd({ cmd = 'argadd', args = { '%:p:h:t', '%:p:h:t' } }, {})
+      local arg = funcs.expand('%:p:h:t')
+      eq({ arg, arg }, funcs.argv())
+    end)
+    it("'make' command works when argument count isn't 1 #19696", function()
+      command('set makeprg=echo')
+      command('set shellquote=')
+      matches('^:!echo ',
+              meths.cmd({ cmd = 'make' }, { output = true }))
+      assert_alive()
+      matches('^:!echo foo bar',
+              meths.cmd({ cmd = 'make', args = { 'foo', 'bar' } }, { output = true }))
+      assert_alive()
+      local arg_pesc = pesc(funcs.expand('%:p:h:t'))
+      matches(('^:!echo %s %s'):format(arg_pesc, arg_pesc),
+              meths.cmd({ cmd = 'make', args = { '%:p:h:t', '%:p:h:t' } }, { output = true }))
+      assert_alive()
+    end)
+    it('doesn\'t display messages when output=true', function()
+      local screen = Screen.new(40, 6)
+      screen:attach()
+      screen:set_default_attr_ids({
+        [0] = {bold=true, foreground=Screen.colors.Blue},
+      })
+      meths.cmd({cmd = 'echo', args = {[['hello']]}}, {output = true})
+      screen:expect{grid=[[
+        ^                                        |
+        {0:~                                       }|
+        {0:~                                       }|
+        {0:~                                       }|
+        {0:~                                       }|
+                                                |
+      ]]}
+      exec([[
+        func Print()
+          call nvim_cmd(#{cmd: 'echo', args: ['"hello"']}, #{output: v:true})
+        endfunc
+      ]])
+      feed([[:echon 1 | call Print() | echon 5<CR>]])
+      screen:expect{grid=[[
+        ^                                        |
+        {0:~                                       }|
+        {0:~                                       }|
+        {0:~                                       }|
+        {0:~                                       }|
+        15                                      |
+      ]]}
+    end)
+    it('works with non-String args', function()
+      eq('2', meths.cmd({cmd = 'echo', args = {2}}, {output = true}))
+      eq('1', meths.cmd({cmd = 'echo', args = {true}}, {output = true}))
+    end)
+    describe('first argument as count', function()
+      before_each(clear)
+
+      it('works', function()
+        command('vsplit | enew')
+        meths.cmd({cmd = 'bdelete', args = {meths.get_current_buf()}}, {})
+        eq(1, meths.get_current_buf().id)
+      end)
+      it('works with :sleep using milliseconds', function()
+        local start = luv.now()
+        meths.cmd({cmd = 'sleep', args = {'100m'}}, {})
+        ok(luv.now() - start <= 300)
+      end)
     end)
   end)
 end)

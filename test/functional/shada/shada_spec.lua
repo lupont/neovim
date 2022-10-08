@@ -7,7 +7,7 @@ local write_file, spawn, set_session, nvim_prog, exc_exec =
   helpers.exc_exec
 
 local lfs = require('lfs')
-local paths = require('test.config.paths')
+local paths = require('test.cmakeconfig.paths')
 
 local mpack = require('mpack')
 
@@ -236,6 +236,15 @@ describe('ShaDa support code', function()
     nvim_command('set shada=')
     eq('', meths.get_option('viminfo'))
     eq('', meths.get_option('shada'))
+  end)
+
+  it('setting &shada gives proper error message on missing number', function()
+    eq([[Vim(set):E526: Missing number after <">: shada="]],
+       exc_exec([[set shada=\"]]))
+    for _, c in ipairs({"'", "/", ":", "<", "@", "s"}) do
+      eq(([[Vim(set):E526: Missing number after <%s>: shada=%s]]):format(c, c),
+         exc_exec(([[set shada=%s]]):format(c)))
+    end
   end)
 
   it('does not crash when ShaDa file directory is not writable', function()

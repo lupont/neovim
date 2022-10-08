@@ -35,7 +35,7 @@ filename	One or more file names.  The first one will be the current
 		no other options or "+command" argument can follow.
 
 							*--*
--		Alias for stdin (standard input).
+`-`		Alias for stdin (standard input).
 		Example: >
 			echo text | nvim - file
 <		"text" is read into buffer 1, "file" is opened as buffer 2.
@@ -82,12 +82,10 @@ argument.
 --help							*-h* *--help* *-?*
 -?
 -h		Give usage (help) message and exit.
-		See |info-message| about capturing the text.
 
 --version						*-v* *--version*
 -v		Print version information and exit.  Same output as for
 		|:version| command.
-		See |info-message| about capturing the text.
 
 							*--clean*
 --clean		Mimics a fresh install of Nvim:
@@ -407,7 +405,7 @@ accordingly, proceeding as follows:
 	Nvim started with |--embed| waits for the UI to connect before
 	proceeding to load user configuration.
 
-4. Setup |default-mappings| and  |default-autocmds|.
+4. Setup |default-mappings| and |default-autocmds|.  Create |popup-menu|.
 
 5. Enable filetype and indent plugins.
 	This does the same as the command: >
@@ -1184,7 +1182,7 @@ exactly four MessagePack objects:
                        encoding   Binary, effective 'encoding' value.
                        max_kbyte  Integer, effective |shada-s| limit value.
                        pid        Integer, instance process ID.
-                       *          It is allowed to have any number of
+                       `*`          It is allowed to have any number of
                                   additional keys with any data.
    2 (SearchPattern)   Map containing data describing last used search or
                        substitute pattern.  Normally ShaDa file contains two
@@ -1215,7 +1213,7 @@ exactly four MessagePack objects:
                        sp   Binary   N/A      Actual pattern.  Required.
                        sb   Boolean  false    True if search direction is
                                               backward.
-                       *    any      none     Other keys are allowed for
+                       `*`    any      none     Other keys are allowed for
                                               compatibility reasons, see
                                               |shada-compatibility|.
    3 (SubString)       Array containing last |:substitute| replacement string.
@@ -1286,7 +1284,7 @@ exactly four MessagePack objects:
                                                GlobalMark and LocalMark
                                                entries.
                        f    Binary    N/A      File name.  Required.
-                       *    any       none     Other keys are allowed for
+                       `*`    any       none     Other keys are allowed for
                                                compatibility reasons, see
                                                |shada-compatibility|.
    9 (BufferList)      Array containing maps.  Each map in the array
@@ -1296,10 +1294,10 @@ exactly four MessagePack objects:
                                                greater then zero.
                        c    UInteger  0        Position column number.
                        f    Binary    N/A      File name.  Required.
-                       *    any       none     Other keys are allowed for
+                       `*`    any       none     Other keys are allowed for
                                                compatibility reasons, see
                                                |shada-compatibility|.
-   * (Unknown)         Any other entry type is allowed for compatibility
+   `*` (Unknown)         Any other entry type is allowed for compatibility
                        reasons, see |shada-compatibility|.
 
 								*E575* *E576*
@@ -1328,8 +1326,9 @@ paths.
 						*base-directories* *xdg*
 The "base" (root) directories conform to the XDG Base Directory Specification.
 https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
-The $XDG_CONFIG_HOME, $XDG_DATA_HOME and $XDG_STATE_HOME environment variables
-are used if they exist, otherwise default values (listed below) are used.
+The $XDG_CONFIG_HOME, $XDG_DATA_HOME, $XDG_RUNTIME_DIR, and $XDG_STATE_HOME
+environment variables are used if defined, else default values (listed below)
+are used.
 
 CONFIG DIRECTORY (DEFAULT) ~
                   *$XDG_CONFIG_HOME*            Nvim: stdpath("config")
@@ -1340,6 +1339,11 @@ DATA DIRECTORY (DEFAULT) ~
                   *$XDG_DATA_HOME*              Nvim: stdpath("data")
     Unix:         ~/.local/share              ~/.local/share/nvim
     Windows:      ~/AppData/Local             ~/AppData/Local/nvim-data
+
+RUN DIRECTORY (DEFAULT) ~
+                  *$XDG_RUNTIME_DIR*            Nvim: stdpath("run")
+    Unix:         /tmp/nvim.user/xxx          /tmp/nvim.user/xxx
+    Windows:      $TMP/nvim.user/xxx          $TMP/nvim.user/xxx
 
 STATE DIRECTORY (DEFAULT) ~
                   *$XDG_STATE_HOME*             Nvim: stdpath("state")
@@ -1353,7 +1357,7 @@ LOG FILE					*$NVIM_LOG_FILE* *E5430*
 Besides 'debug' and 'verbose', Nvim keeps a general log file for internal
 debugging, plugins and RPC clients. >
 	:echo $NVIM_LOG_FILE
-By default, the file is located at stdpath('log')/log unless that path
+By default, the file is located at stdpath("log")/log unless that path
 is inaccessible or if $NVIM_LOG_FILE was set before |startup|.
 
 

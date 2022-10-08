@@ -38,7 +38,7 @@ centralized reference of the differences.
 - 'complete' excludes "i"
 - 'cscopeverbose' is enabled
 - 'directory' defaults to ~/.local/state/nvim/swap// (|xdg|), auto-created
-- 'display' defaults to "lastline,msgsep"
+- 'display' defaults to "lastline"
 - 'encoding' is UTF-8 (cf. 'fileencoding' for file-content encoding)
 - 'fillchars' defaults (in effect) to "vert:│,fold:·,sep:│"
 - 'formatoptions' defaults to "tcqj"
@@ -52,6 +52,8 @@ centralized reference of the differences.
 - 'langremap' is disabled
 - 'laststatus' defaults to 2 (statusline is always shown)
 - 'listchars' defaults to "tab:> ,trail:-,nbsp:+"
+- 'mouse' defaults to "nvi"
+- 'mousemodel' defaults to "popup_setpos"
 - 'nrformats' defaults to "bin,hex"
 - 'ruler' is enabled
 - 'sessionoptions' includes "unix,slash", excludes "options"
@@ -71,12 +73,33 @@ centralized reference of the differences.
 - 'wildmenu' is enabled
 - 'wildoptions' defaults to "pum,tagfile"
 
-- |man.vim| plugin is enabled, so |:Man| is available by default.
+- |man.lua| plugin is enabled, so |:Man| is available by default.
 - |matchit| plugin is enabled. To disable it in your config: >
     :let loaded_matchit = 1
 
 - |g:vimsyn_embed| defaults to "l" to enable Lua highlighting
 
+
+Default Mouse ~
+						*default-mouse* *disable-mouse*
+By default the mouse is enabled, and <RightMouse> opens a |popup-menu| with
+standard actions ("Cut", "Copy", "Paste", …). Mouse is NOT enabled in
+|command-mode| or the |more-prompt|, so you can temporarily disable it just by
+typing ":".
+
+If you don't like this you can disable the mouse in your |config| using any of
+the following:
+- Disable mouse completely by unsetting the 'mouse' option: >
+  set mouse=
+- Pressing <RightMouse> extends selection instead of showing popup-menu: >
+  set mousemodel=extend
+- Pressing <A-LeftMouse> releases mouse until the cursor moves:  >
+  nnoremap <A-LeftMouse> <Cmd>
+    \ set mouse=<Bar>
+    \ echo 'mouse OFF until next cursor-move'<Bar>
+    \ autocmd CursorMoved * ++once set mouse&<Bar>
+    \ echo 'mouse ON'<CR>
+<
 
 Default Mappings ~
 							*default-mappings*
@@ -89,6 +112,7 @@ of these in your config by simply removing the mapping, e.g. ":unmap Y".
 	inoremap <C-W> <C-G>u<C-W>
 	xnoremap * y/\V<C-R>"<CR>
 	xnoremap # y?\V<C-R>"<CR>
+	nnoremap & :&&<CR>
 <
 Default Autocommands ~
 							*default-autocmds*
@@ -180,9 +204,8 @@ Commands:
   |:checkhealth|
   |:drop| is always available
   |:Man| is available by default, with many improvements such as completion
-  |:sign-define| accepts a `numhl` argument, to highlight the line number
   |:match| can be invoked before highlight group is defined
-  |:source| works with Lua and anonymous (no file) scripts
+  |:source| works with Lua
   User commands can support |:command-preview| to show results as you type
 
 Events:
@@ -223,27 +246,26 @@ Input/Mappings:
   <M-1>, <M-BS>, <M-Del>, <M-Ins>, <M-/>, <M-\>, <M-Space>, <M-Enter>, etc.
   Case-sensitive: <M-a> and <M-A> are two different keycodes.
 
-  ALT behaves like <Esc> if not mapped. |i_ALT| |v_ALT| |c_ALT|
+  ALT may behave like <Esc> if not mapped. |i_ALT| |v_ALT| |c_ALT|
 
 Normal commands:
   |gO| shows a filetype-defined "outline" of the current buffer.
 
 Options:
   'cpoptions'   flags: |cpo-_|
-  'display'     flags: "msgsep" minimizes scrolling when showing messages
   'guicursor'   works in the terminal
-  'fillchars'   flags: "msgsep" (see 'display'), "horiz", "horizup",
+  'fillchars'   flags: "msgsep", "horiz", "horizup",
                 "horizdown", "vertleft", "vertright", "verthoriz"
   'foldcolumn'  supports up to 9 dynamic/fixed columns
   'inccommand'  shows interactive results for |:substitute|-like commands
                 and |:command-preview| commands
   'laststatus'  global statusline support
+  'mousescroll' amount to scroll by when scrolling with a mouse
   'pumblend'    pseudo-transparent popupmenu
   'scrollback'
   'signcolumn'  supports up to 9 dynamic/fixed columns
   'statusline'  supports unlimited alignment sections
   'tabline'     %@Func@foo%X can call any function on mouse-click
-  'wildoptions' "pum" flag to use popupmenu for wildmode completion
   'winblend'    pseudo-transparency in floating windows |api-floatwin|
   'winhighlight' window-local highlights
 
@@ -345,11 +367,17 @@ Lua interface (|lua.txt|):
 
 Commands:
   |:doautocmd| does not warn about "No matching autocommands".
+  |:wincmd| accepts a count.
+  `:write!` does not show a prompt if the file was updated externally.
+
+Command line completion:
+  The meanings of arrow keys do not change depending on 'wildoptions'.
 
 Functions:
   |input()| and |inputdialog()| support for each other’s features (return on
   cancel and completion respectively) via dictionary argument (replaces all
-  other arguments if used).
+  other arguments if used), and "cancelreturn" can have any type if passed in
+  a dictionary.
   |input()| and |inputdialog()| support user-defined cmdline highlighting.
 
 Highlight groups:
@@ -359,6 +387,9 @@ Highlight groups:
   using |n| or |N|
   |hl-CursorLine| is low-priority unless foreground color is set
   |hl-VertSplit| superseded by |hl-WinSeparator|
+  Highlight groups names are allowed to contain the characters `.` and `@`.
+  It is an error to define a highlight group with a name that doesn't match
+  the regexp `[a-zA-Z0-9_.@]*` (see |group-name|).
 
 Macro/|recording| behavior
   Replay of a macro recorded during :lmap produces the same actions as when it
@@ -382,7 +413,9 @@ Normal commands:
 
 Options:
   'ttimeout', 'ttimeoutlen' behavior was simplified
-  |jumpoptions| "stack" behavior
+  'jumpoptions' "stack" behavior
+  'jumpoptions' "view" tries to restore the |mark-view| when moving through
+  the |jumplist|, |changelist|, |alternate-file| or using |mark-motions|.
   'shortmess' the "F" flag does not affect output from autocommands
 
 Shell:
@@ -442,6 +475,11 @@ TUI:
 UI/Display:
   |Visual| selection highlights the character at cursor. |visual-use|
 
+  messages: When showing messages longer than 'cmdheight', only
+  scroll the message lines, not the entire screen. The
+  separator line is decorated by |hl-MsgSeparator| and
+  the "msgsep" flag of 'fillchars'. *msgsep*
+
 Vimscript compatibility:
   `count` does not alias to |v:count|
   `errmsg` does not alias to |v:errmsg|
@@ -461,12 +499,15 @@ Working directory (Vim implemented some of these later than Nvim):
 ==============================================================================
 5. Missing legacy features				 *nvim-features-missing*
 
-Some legacy Vim features are not implemented:
+Some legacy Vim features are not yet implemented:
 
-- |if_lua|: Nvim Lua API is not compatible with Vim's "if_lua"
+- *if_lua* : Nvim |Lua| API is not compatible with Vim's "if_lua"
 - *if_mzscheme*
-- |if_py|: *python-bindeval* *python-Function* are not supported
+- |if_pyth|: *python-bindeval* *python-Function* are not supported
 - *if_tcl*
+
+*:gui*
+*:gvim*
 
 ==============================================================================
 6. Removed features					 *nvim-features-removed*
@@ -529,18 +570,18 @@ Highlight groups:
 <
 
 Options:
-  'antialias'
+  antialias
   *'balloondelay'* *'bdlay'*
   *'ballooneval'* *'beval'* *'noballooneval'* *'nobeval'*
   *'balloonexpr'* *'bexpr'*
-  'bioskey' (MS-DOS)
-  'conskey' (MS-DOS)
+  bioskey (MS-DOS)
+  conskey (MS-DOS)
   *'cp'* *'nocompatible'* *'nocp'* *'compatible'* (Nvim is always "nocompatible".)
   'cpoptions' (gjkHw<*- and all POSIX flags were removed)
   *'cryptmethod'* *'cm'* *'key'* (Vim encryption implementation)
   *'ed'* *'edcompatible'* *'noed'* *'noedcompatible'*
   'encoding' ("utf-8" is always used)
-  'esckeys'
+  esckeys
   'guioptions' "t" flag was removed
   *'guifontset'* *'gfs'* (Use 'guifont' instead.)
   *'guipty'* (Nvim uses pipes and PTYs consistently on all platforms.)
@@ -581,18 +622,18 @@ Options:
     Nvim always displays up to 6 combining characters.  You can still edit
     text with more than 6 combining characters, you just can't see them.
     Use |g8| or |ga|.  See |mbyte-combining|.
-  'maxmem' Nvim delegates memory-management to the OS.
-  'maxmemtot' Nvim delegates memory-management to the OS.
+  *'maxmem'* Nvim delegates memory-management to the OS.
+  *'maxmemtot'* Nvim delegates memory-management to the OS.
   *'prompt'* *'noprompt'*
   *'remap'* *'noremap'*
   *'restorescreen'* *'rs'* *'norestorescreen'* *'nors'*
-  'shelltype'
+  *'shelltype'*
   *'shortname'* *'sn'* *'noshortname'* *'nosn'*
   *'swapsync'* *'sws'*
   *'termencoding'* *'tenc'* (Vim 7.4.852 also removed this for Windows)
   *'terse'* *'noterse'* (Add "s" to 'shortmess' instead)
-  'textauto'
-  'textmode'
+  textauto
+  textmode
   *'toolbar'* *'tb'*
   *'toolbariconsize'* *'tbis'*
   *'ttybuiltin'* *'tbi'* *'nottybuiltin'* *'notbi'*
@@ -600,7 +641,7 @@ Options:
   *'ttymouse'* *'ttym'*
   *'ttyscroll'* *'tsl'*
   *'ttytype'* *'tty'*
-  'weirdinvert'
+  weirdinvert
 
 Startup:
   --literal (file args are always literal; to expand wildcards on Windows, use

@@ -202,7 +202,7 @@ _ERROR_CATEGORIES = [
     'whitespace/cast',
 ]
 
-# The default state of the category filter. This is overrided by the --filter=
+# The default state of the category filter. This is overridden by the --filter=
 # flag. By default all errors are on, so only add here categories that should be
 # off by default (i.e., categories that must be enabled by the --filter= flags).
 # All entries here should start with a '-' or '+', as in the --filter= flag.
@@ -650,6 +650,9 @@ def Error(filename, linenum, category, confidence, message):
                 filename, linenum, message, category, confidence))
         elif _cpplint_state.output_format == 'eclipse':
             sys.stdout.write('%s:%s: warning: %s  [%s] [%d]\n' % (
+                filename, linenum, message, category, confidence))
+        elif _cpplint_state.output_format == 'gh_action':
+            sys.stdout.write('::error file=%s,line=%s::%s  [%s] [%d]\n' % (
                 filename, linenum, message, category, confidence))
         else:
             sys.stdout.write('%s:%s:  %s  [%s] [%d]\n' % (
@@ -1938,13 +1941,6 @@ def CheckExpressionAlignment(filename, clean_lines, linenum, error, startpos=0):
                             error(filename, linenum, 'whitespace/indent', 2,
                                   'End of the inner expression should have '
                                   'the same indent as start')
-                else:
-                    if (pos != depth_line_starts[depth][0] + 4
-                        and not (depth_line_starts[depth][1] == '{'
-                                 and pos == depth_line_starts[depth][0] + 2)):
-                        if depth not in ignore_error_levels:
-                            error(filename, linenum, 'whitespace/indent', 2,
-                                  'Inner expression indentation should be 4')
             else:
                 if (pos != level_starts[depth][0] + 1
                         + (level_starts[depth][2] == '{')):
@@ -2704,7 +2700,7 @@ def CheckLanguage(filename, clean_lines, linenum, error):
     if match:
         error(filename, linenum, 'runtime/printf', 4,
               'Use xstrlcat or snprintf instead of %s' % match.group(1))
-    if not Search(r'eval/typval\.[ch]$', filename):
+    if not Search(r'eval/typval\.[ch]$|eval/typval_defs\.h$', filename):
         match = Search(r'(?:\.|->)'
                        r'(?:lv_(?:first|last|refcount|len|watch|idx(?:_item)?'
                        r'|copylist|lock)'
@@ -3053,7 +3049,7 @@ def ParseArguments(args):
         if opt == '--help':
             PrintUsage(None)
         elif opt == '--output':
-            if val not in ('emacs', 'vs7', 'eclipse'):
+            if val not in ('emacs', 'vs7', 'eclipse', 'gh_action'):
                 PrintUsage('The only allowed output formats are emacs,'
                            ' vs7 and eclipse.')
             output_format = val

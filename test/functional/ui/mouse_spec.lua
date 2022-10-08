@@ -32,7 +32,7 @@ describe('ui/mouse/input', function()
       [6] = {foreground = Screen.colors.Grey100, background = Screen.colors.Red},
       [7] = {bold = true, foreground = Screen.colors.SeaGreen4},
     })
-    command("set display-=msgsep")
+    command("set mousemodel=extend")
     feed('itesting<cr>mouse<cr>support and selection<esc>')
     screen:expect([[
       testing                  |
@@ -648,8 +648,10 @@ describe('ui/mouse/input', function()
     ]]}
   end)
 
-  it('two clicks will select the word and enter VISUAL', function()
-    feed('<LeftMouse><2,2><LeftMouse><2,2>')
+  it('two clicks will enter VISUAL and dragging selects words', function()
+    feed('<LeftMouse><2,2>')
+    feed('<LeftRelease><2,2>')
+    feed('<LeftMouse><2,2>')
     screen:expect([[
       testing                  |
       mouse                    |
@@ -657,10 +659,38 @@ describe('ui/mouse/input', function()
       {0:~                        }|
       {2:-- VISUAL --}             |
     ]])
+    feed('<LeftDrag><0,1>')
+    screen:expect([[
+      testing                  |
+      ^m{1:ouse}                    |
+      {1:support} and selection    |
+      {0:~                        }|
+      {2:-- VISUAL --}             |
+    ]])
+    feed('<LeftDrag><4,0>')
+    screen:expect([[
+      ^t{1:esting}                  |
+      {1:mouse}                    |
+      {1:support} and selection    |
+      {0:~                        }|
+      {2:-- VISUAL --}             |
+    ]])
+    feed('<LeftDrag><14,2>')
+    screen:expect([[
+      testing                  |
+      mouse                    |
+      {1:support and selectio}^n    |
+      {0:~                        }|
+      {2:-- VISUAL --}             |
+    ]])
   end)
 
-  it('three clicks will select the line and enter VISUAL LINE', function()
-    feed('<LeftMouse><2,2><LeftMouse><2,2><LeftMouse><2,2>')
+  it('three clicks will enter VISUAL LINE and dragging selects lines', function()
+    feed('<LeftMouse><2,2>')
+    feed('<LeftRelease><2,2>')
+    feed('<LeftMouse><2,2>')
+    feed('<LeftRelease><2,2>')
+    feed('<LeftMouse><2,2>')
     screen:expect([[
       testing                  |
       mouse                    |
@@ -668,14 +698,68 @@ describe('ui/mouse/input', function()
       {0:~                        }|
       {2:-- VISUAL LINE --}        |
     ]])
+    feed('<LeftDrag><0,1>')
+    screen:expect([[
+      testing                  |
+      ^m{1:ouse}                    |
+      {1:support and selection}    |
+      {0:~                        }|
+      {2:-- VISUAL LINE --}        |
+    ]])
+    feed('<LeftDrag><4,0>')
+    screen:expect([[
+      {1:test}^i{1:ng}                  |
+      {1:mouse}                    |
+      {1:support and selection}    |
+      {0:~                        }|
+      {2:-- VISUAL LINE --}        |
+    ]])
+    feed('<LeftDrag><14,2>')
+    screen:expect([[
+      testing                  |
+      mouse                    |
+      {1:support and se}^l{1:ection}    |
+      {0:~                        }|
+      {2:-- VISUAL LINE --}        |
+    ]])
   end)
 
-  it('four clicks will enter VISUAL BLOCK', function()
-    feed('<LeftMouse><2,2><LeftMouse><2,2><LeftMouse><2,2><LeftMouse><2,2>')
+  it('four clicks will enter VISUAL BLOCK and dragging selects blockwise', function()
+    feed('<LeftMouse><2,2>')
+    feed('<LeftRelease><2,2>')
+    feed('<LeftMouse><2,2>')
+    feed('<LeftRelease><2,2>')
+    feed('<LeftMouse><2,2>')
+    feed('<LeftRelease><2,2>')
+    feed('<LeftMouse><2,2>')
     screen:expect([[
       testing                  |
       mouse                    |
       su^pport and selection    |
+      {0:~                        }|
+      {2:-- VISUAL BLOCK --}       |
+    ]])
+    feed('<LeftDrag><0,1>')
+    screen:expect([[
+      testing                  |
+      ^m{1:ou}se                    |
+      {1:sup}port and selection    |
+      {0:~                        }|
+      {2:-- VISUAL BLOCK --}       |
+    ]])
+    feed('<LeftDrag><4,0>')
+    screen:expect([[
+      te{1:st}^ing                  |
+      mo{1:use}                    |
+      su{1:ppo}rt and selection    |
+      {0:~                        }|
+      {2:-- VISUAL BLOCK --}       |
+    ]])
+    feed('<LeftDrag><14,2>')
+    screen:expect([[
+      testing                  |
+      mouse                    |
+      su{1:pport and se}^lection    |
       {0:~                        }|
       {2:-- VISUAL BLOCK --}       |
     ]])
@@ -1572,22 +1656,35 @@ describe('ui/mouse/input', function()
     meths.input_mouse('left', 'release', '', 0, 0, 0)
   end)
 
-  it('scroll keys are not translated into multiclicks #6211 #6989', function()
+  it('scroll keys are not translated into multiclicks and can be mapped #6211 #6989', function()
     meths.set_var('mouse_up', 0)
     meths.set_var('mouse_up2', 0)
-    meths.set_var('mouse_up3', 0)
-    meths.set_var('mouse_up4', 0)
     command('nnoremap <ScrollWheelUp> <Cmd>let g:mouse_up += 1<CR>')
     command('nnoremap <2-ScrollWheelUp> <Cmd>let g:mouse_up2 += 1<CR>')
-    command('nnoremap <3-ScrollWheelUp> <Cmd>let g:mouse_up3 += 1<CR>')
-    command('nnoremap <4-ScrollWheelUp> <Cmd>let g:mouse_up4 += 1<CR>')
-    meths.input_mouse('wheel', 'up', '', 0, 0, 0)
-    meths.input_mouse('wheel', 'up', '', 0, 0, 0)
+    feed('<ScrollWheelUp><0,0>')
+    feed('<ScrollWheelUp><0,0>')
     meths.input_mouse('wheel', 'up', '', 0, 0, 0)
     meths.input_mouse('wheel', 'up', '', 0, 0, 0)
     eq(4, meths.get_var('mouse_up'))
     eq(0, meths.get_var('mouse_up2'))
-    eq(0, meths.get_var('mouse_up3'))
-    eq(0, meths.get_var('mouse_up4'))
+  end)
+
+  it('<MouseMove> is not translated into multiclicks and can be mapped', function()
+    meths.set_var('mouse_move', 0)
+    meths.set_var('mouse_move2', 0)
+    command('nnoremap <MouseMove> <Cmd>let g:mouse_move += 1<CR>')
+    command('nnoremap <2-MouseMove> <Cmd>let g:mouse_move2 += 1<CR>')
+    feed('<MouseMove><0,0>')
+    feed('<MouseMove><0,0>')
+    meths.input_mouse('move', '', '', 0, 0, 0)
+    meths.input_mouse('move', '', '', 0, 0, 0)
+    eq(4, meths.get_var('mouse_move'))
+    eq(0, meths.get_var('mouse_move2'))
+  end)
+
+  it('feeding <MouseMove> in Normal mode does not use uninitialized memory #19480', function()
+    feed('<MouseMove>')
+    helpers.poke_eventloop()
+    helpers.assert_alive()
   end)
 end)

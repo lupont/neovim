@@ -13,12 +13,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "nvim/arglist.h"
 #include "nvim/ascii.h"
 #include "nvim/buffer.h"
 #include "nvim/cursor.h"
 #include "nvim/edit.h"
 #include "nvim/eval.h"
-#include "nvim/ex_cmds2.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/ex_getln.h"
 #include "nvim/ex_session.h"
@@ -34,6 +34,7 @@
 #include "nvim/os/os.h"
 #include "nvim/os/time.h"
 #include "nvim/path.h"
+#include "nvim/runtime.h"
 #include "nvim/vim.h"
 #include "nvim/window.h"
 
@@ -187,11 +188,14 @@ static int ses_do_win(win_T *wp)
   }
   if (wp->w_buffer->b_fname == NULL
       // When 'buftype' is "nofile" can't restore the window contents.
-      || (!wp->w_buffer->terminal && bt_nofile(wp->w_buffer))) {
+      || (!wp->w_buffer->terminal && bt_nofilename(wp->w_buffer))) {
     return ssop_flags & SSOP_BLANK;
   }
   if (bt_help(wp->w_buffer)) {
     return ssop_flags & SSOP_HELP;
+  }
+  if (bt_terminal(wp->w_buffer)) {
+    return ssop_flags & SSOP_TERMINAL;
   }
   return true;
 }
@@ -215,7 +219,7 @@ static int ses_arglist(FILE *fd, char *cmd, garray_T *gap, int fullname, unsigne
   }
   for (int i = 0; i < gap->ga_len; i++) {
     // NULL file names are skipped (only happens when out of memory).
-    s = alist_name(&((aentry_T *)gap->ga_data)[i]);
+    s = (char_u *)alist_name(&((aentry_T *)gap->ga_data)[i]);
     if (s != NULL) {
       if (fullname) {
         buf = xmalloc(MAXPATHL);
@@ -248,9 +252,9 @@ static char *ses_get_fname(buf_T *buf, unsigned *flagp)
       && (ssop_flags & (SSOP_CURDIR | SSOP_SESDIR))
       && !p_acd
       && !did_lcd) {
-    return (char *)buf->b_sfname;
+    return buf->b_sfname;
   }
-  return (char *)buf->b_ffname;
+  return buf->b_ffname;
 }
 
 /// Write a buffer name to the session file.
@@ -275,7 +279,7 @@ static int ses_fname(FILE *fd, buf_T *buf, unsigned *flagp, bool add_eol)
 static char *ses_escape_fname(char *name, unsigned *flagp)
 {
   char *p;
-  char *sname = (char *)home_replace_save(NULL, (char_u *)name);
+  char *sname = home_replace_save(NULL, name);
 
   // Always SSOP_SLASH: change all backslashes to forward slashes.
   for (p = sname; *p != NUL; MB_PTR_ADV(p)) {
@@ -285,7 +289,7 @@ static char *ses_escape_fname(char *name, unsigned *flagp)
   }
 
   // Escape special characters.
-  p = vim_strsave_fnameescape(sname, false);
+  p = vim_strsave_fnameescape(sname, VSE_NONE);
   xfree(sname);
   return p;
 }
@@ -355,7 +359,7 @@ static int put_view(FILE *fd, win_T *wp, int add_edit, unsigned *flagp, int curr
       // Then ":help" will re-use both the buffer and the window and set
       // the options, even when "options" is not in 'sessionoptions'.
       if (0 < wp->w_tagstackidx && wp->w_tagstackidx <= wp->w_tagstacklen) {
-        curtag = (char *)wp->w_tagstack[wp->w_tagstackidx - 1].tagname;
+        curtag = wp->w_tagstack[wp->w_tagstackidx - 1].tagname;
       }
 
       if (put_line(fd, "enew | setl bt=help") == FAIL
@@ -363,7 +367,7 @@ static int put_view(FILE *fd, win_T *wp, int add_edit, unsigned *flagp, int curr
         return FAIL;
       }
     } else if (wp->w_buffer->b_ffname != NULL
-               && (!bt_nofile(wp->w_buffer) || wp->w_buffer->terminal)) {
+               && (!bt_nofilename(wp->w_buffer) || wp->w_buffer->terminal)) {
       // Load the file.
 
       // Editing a file in this buffer: use ":edit file".
@@ -407,6 +411,8 @@ static int put_view(FILE *fd, win_T *wp, int add_edit, unsigned *flagp, int curr
     if ((flagp == &ssop_flags) && alt != NULL && alt->b_fname != NULL
         && *alt->b_fname != NUL
         && alt->b_p_bl
+        // do not set balt if buffer is terminal and "terminal" is not set in options
+        && !(bt_terminal(alt) && !(ssop_flags & SSOP_TERMINAL))
         && (fputs("balt ", fd) < 0
             || ses_fname(fd, alt, flagp, true) == FAIL)) {
       return FAIL;
@@ -517,7 +523,7 @@ static int put_view(FILE *fd, win_T *wp, int add_edit, unsigned *flagp, int curr
   if (wp->w_localdir != NULL
       && (flagp != &vop_flags || (*flagp & SSOP_CURDIR))) {
     if (fputs("lcd ", fd) < 0
-        || ses_put_fname(fd, wp->w_localdir, flagp) == FAIL
+        || ses_put_fname(fd, (char_u *)wp->w_localdir, flagp) == FAIL
         || fprintf(fd, "\n") < 0) {
       return FAIL;
     }
@@ -542,7 +548,7 @@ static int makeopens(FILE *fd, char_u *dirnow)
   int nr;
   int restore_size = true;
   win_T *wp;
-  char_u *sname;
+  char *sname;
   win_T *edited_win = NULL;
   int tabnr;
   win_T *tab_firstwin;
@@ -575,8 +581,8 @@ static int makeopens(FILE *fd, char_u *dirnow)
   if (ssop_flags & SSOP_SESDIR) {
     PUTLINE_FAIL("exe \"cd \" . escape(expand(\"<sfile>:p:h\"), ' ')");
   } else if (ssop_flags & SSOP_CURDIR) {
-    sname = home_replace_save(NULL, globaldir != NULL ? (char_u *)globaldir : dirnow);
-    char *fname_esc = ses_escape_fname((char *)sname, &ssop_flags);
+    sname = home_replace_save(NULL, globaldir != NULL ? globaldir : (char *)dirnow);
+    char *fname_esc = ses_escape_fname(sname, &ssop_flags);
     if (fprintf(fd, "cd %s\n", fname_esc) < 0) {
       xfree(fname_esc);
       xfree(sname);
@@ -616,12 +622,13 @@ static int makeopens(FILE *fd, char_u *dirnow)
   FOR_ALL_BUFFERS(buf) {
     if (!(only_save_windows && buf->b_nwindows == 0)
         && !(buf->b_help && !(ssop_flags & SSOP_HELP))
+        && !(bt_terminal(buf) && !(ssop_flags & SSOP_TERMINAL))
         && buf->b_fname != NULL
         && buf->b_p_bl) {
       if (fprintf(fd, "badd +%" PRId64 " ",
                   buf->b_wininfo == NULL
                   ? (int64_t)1L
-                  : (int64_t)buf->b_wininfo->wi_fpos.lnum) < 0
+                  : (int64_t)buf->b_wininfo->wi_mark.mark.lnum) < 0
           || ses_fname(fd, buf, &ssop_flags, true) == FAIL) {
         return FAIL;
       }
@@ -706,7 +713,7 @@ static int makeopens(FILE *fd, char_u *dirnow)
       if (ses_do_win(wp)
           && wp->w_buffer->b_ffname != NULL
           && !bt_help(wp->w_buffer)
-          && !bt_nofile(wp->w_buffer)) {
+          && !bt_nofilename(wp->w_buffer)) {
         if (need_tabnext && put_line(fd, "tabnext") == FAIL) {
           return FAIL;
         }
@@ -821,7 +828,7 @@ static int makeopens(FILE *fd, char_u *dirnow)
     // Take care of tab-local working directories if applicable
     if (tp->tp_localdir) {
       if (fputs("if exists(':tcd') == 2 | tcd ", fd) < 0
-          || ses_put_fname(fd, tp->tp_localdir, &ssop_flags) == FAIL
+          || ses_put_fname(fd, (char_u *)tp->tp_localdir, &ssop_flags) == FAIL
           || fputs(" | endif\n", fd) < 0) {
         return FAIL;
       }
@@ -949,7 +956,7 @@ void ex_mkrc(exarg_T *eap)
   }
 
   // When using 'viewdir' may have to create the directory.
-  if (using_vdir && !os_isdir(p_vdir)) {
+  if (using_vdir && !os_isdir((char *)p_vdir)) {
     vim_mkdir_emsg((const char *)p_vdir, 0755);
   }
 
@@ -1001,7 +1008,7 @@ void ex_mkrc(exarg_T *eap)
           *dirnow = NUL;
         }
         if (*dirnow != NUL && (ssop_flags & SSOP_SESDIR)) {
-          if (vim_chdirfile((char_u *)fname, kCdCauseOther) == OK) {
+          if (vim_chdirfile(fname, kCdCauseOther) == OK) {
             shorten_fnames(true);
           }
         } else if (*dirnow != NUL
@@ -1075,7 +1082,7 @@ static char *get_view_file(int c)
     emsg(_(e_noname));
     return NULL;
   }
-  char *sname = (char *)home_replace_save(NULL, curbuf->b_ffname);
+  char *sname = home_replace_save(NULL, curbuf->b_ffname);
 
   // We want a file name without separators, because we're not going to make
   // a directory.

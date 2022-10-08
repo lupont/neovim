@@ -15,13 +15,98 @@
 #include "nvim/tui/input.h"
 #include "nvim/tui/tui.h"
 #include "nvim/vim.h"
-#ifdef WIN32
+#ifdef MSWIN
 # include "nvim/os/os_win_console.h"
 #endif
 #include "nvim/event/rstream.h"
 #include "nvim/msgpack_rpc/channel.h"
 
 #define KEY_BUFFER_SIZE 0xfff
+
+static const struct kitty_key_map_entry {
+  KittyKey key;
+  const char *name;
+} kitty_key_map_entry[] = {
+  { KITTY_KEY_ESCAPE,              "Esc" },
+  { KITTY_KEY_ENTER,               "CR" },
+  { KITTY_KEY_TAB,                 "Tab" },
+  { KITTY_KEY_BACKSPACE,           "BS" },
+  { KITTY_KEY_INSERT,              "Insert" },
+  { KITTY_KEY_DELETE,              "Del" },
+  { KITTY_KEY_LEFT,                "Left" },
+  { KITTY_KEY_RIGHT,               "Right" },
+  { KITTY_KEY_UP,                  "Up" },
+  { KITTY_KEY_DOWN,                "Down" },
+  { KITTY_KEY_PAGE_UP,             "PageUp" },
+  { KITTY_KEY_PAGE_DOWN,           "PageDown" },
+  { KITTY_KEY_HOME,                "Home" },
+  { KITTY_KEY_END,                 "End" },
+  { KITTY_KEY_F1,                  "F1" },
+  { KITTY_KEY_F2,                  "F2" },
+  { KITTY_KEY_F3,                  "F3" },
+  { KITTY_KEY_F4,                  "F4" },
+  { KITTY_KEY_F5,                  "F5" },
+  { KITTY_KEY_F6,                  "F6" },
+  { KITTY_KEY_F7,                  "F7" },
+  { KITTY_KEY_F8,                  "F8" },
+  { KITTY_KEY_F9,                  "F9" },
+  { KITTY_KEY_F10,                 "F10" },
+  { KITTY_KEY_F11,                 "F11" },
+  { KITTY_KEY_F12,                 "F12" },
+  { KITTY_KEY_F13,                 "F13" },
+  { KITTY_KEY_F14,                 "F14" },
+  { KITTY_KEY_F15,                 "F15" },
+  { KITTY_KEY_F16,                 "F16" },
+  { KITTY_KEY_F17,                 "F17" },
+  { KITTY_KEY_F18,                 "F18" },
+  { KITTY_KEY_F19,                 "F19" },
+  { KITTY_KEY_F20,                 "F20" },
+  { KITTY_KEY_F21,                 "F21" },
+  { KITTY_KEY_F22,                 "F22" },
+  { KITTY_KEY_F23,                 "F23" },
+  { KITTY_KEY_F24,                 "F24" },
+  { KITTY_KEY_F25,                 "F25" },
+  { KITTY_KEY_F26,                 "F26" },
+  { KITTY_KEY_F27,                 "F27" },
+  { KITTY_KEY_F28,                 "F28" },
+  { KITTY_KEY_F29,                 "F29" },
+  { KITTY_KEY_F30,                 "F30" },
+  { KITTY_KEY_F31,                 "F31" },
+  { KITTY_KEY_F32,                 "F32" },
+  { KITTY_KEY_F33,                 "F33" },
+  { KITTY_KEY_F34,                 "F34" },
+  { KITTY_KEY_F35,                 "F35" },
+  { KITTY_KEY_KP_0,                "k0" },
+  { KITTY_KEY_KP_1,                "k1" },
+  { KITTY_KEY_KP_2,                "k2" },
+  { KITTY_KEY_KP_3,                "k3" },
+  { KITTY_KEY_KP_4,                "k4" },
+  { KITTY_KEY_KP_5,                "k5" },
+  { KITTY_KEY_KP_6,                "k6" },
+  { KITTY_KEY_KP_7,                "k7" },
+  { KITTY_KEY_KP_8,                "k8" },
+  { KITTY_KEY_KP_9,                "k9" },
+  { KITTY_KEY_KP_DECIMAL,          "kPoint" },
+  { KITTY_KEY_KP_DIVIDE,           "kDivide" },
+  { KITTY_KEY_KP_MULTIPLY,         "kMultiply" },
+  { KITTY_KEY_KP_SUBTRACT,         "kMinus" },
+  { KITTY_KEY_KP_ADD,              "kPlus" },
+  { KITTY_KEY_KP_ENTER,            "kEnter" },
+  { KITTY_KEY_KP_EQUAL,            "kEqual" },
+  { KITTY_KEY_KP_LEFT,             "kLeft" },
+  { KITTY_KEY_KP_RIGHT,            "kRight" },
+  { KITTY_KEY_KP_UP,               "kUp" },
+  { KITTY_KEY_KP_DOWN,             "kDown" },
+  { KITTY_KEY_KP_PAGE_UP,          "kPageUp" },
+  { KITTY_KEY_KP_PAGE_DOWN,        "kPageDown" },
+  { KITTY_KEY_KP_HOME,             "kHome" },
+  { KITTY_KEY_KP_END,              "kEnd" },
+  { KITTY_KEY_KP_INSERT,           "kInsert" },
+  { KITTY_KEY_KP_DELETE,           "kDel" },
+  { KITTY_KEY_KP_BEGIN,            "kOrigin" },
+};
+
+static Map(KittyKey, cstr_t) kitty_key_map = MAP_INIT;
 
 #ifndef UNIT_TESTING
 typedef enum {
@@ -50,10 +135,15 @@ void tinput_init(TermInput *input, Loop *loop)
   uv_mutex_init(&input->key_buffer_mutex);
   uv_cond_init(&input->key_buffer_cond);
 
+  for (size_t i = 0; i < ARRAY_SIZE(kitty_key_map_entry); i++) {
+    map_put(KittyKey, cstr_t)(&kitty_key_map, kitty_key_map_entry[i].key,
+                              kitty_key_map_entry[i].name);
+  }
+
   // If stdin is not a pty, switch to stderr. For cases like:
   //    echo q | nvim -es
   //    ls *.md | xargs nvim
-#ifdef WIN32
+#ifdef MSWIN
   if (!os_isatty(input->in_fd)) {
     input->in_fd = os_get_conin_fd();
   }
@@ -69,14 +159,10 @@ void tinput_init(TermInput *input, Loop *loop)
     term = "";  // termkey_new_abstract assumes non-null (#2745)
   }
 
-#if TERMKEY_VERSION_MAJOR > 0 || TERMKEY_VERSION_MINOR > 18
   input->tk = termkey_new_abstract(term,
                                    TERMKEY_FLAG_UTF8 | TERMKEY_FLAG_NOSTART);
   termkey_hook_terminfo_getstr(input->tk, input->tk_ti_hook_fn, NULL);
   termkey_start(input->tk);
-#else
-  input->tk = termkey_new_abstract(term, TERMKEY_FLAG_UTF8);
-#endif
 
   int curflags = termkey_get_canonflags(input->tk);
   termkey_set_canonflags(input->tk, curflags | TERMKEY_CANON_DELBS);
@@ -89,6 +175,7 @@ void tinput_init(TermInput *input, Loop *loop)
 
 void tinput_destroy(TermInput *input)
 {
+  map_destroy(KittyKey, cstr_t)(&kitty_key_map);
   rbuffer_free(input->key_buffer);
   uv_mutex_destroy(&input->key_buffer_mutex);
   uv_cond_destroy(&input->key_buffer_cond);
@@ -142,12 +229,12 @@ static void tinput_wait_enqueue(void **argv)
       if (ui_client_channel_id) {
         Array args = ARRAY_DICT_INIT;
         Error err = ERROR_INIT;
-        ADD(args, STRING_OBJ(copy_string(keys)));
+        ADD(args, STRING_OBJ(copy_string(keys, NULL)));
         // TODO(bfredl): could be non-blocking now with paste?
         ArenaMem res_mem = NULL;
         Object result = rpc_send_call(ui_client_channel_id, "nvim_input", args, &res_mem, &err);
         consumed = result.type == kObjectTypeInteger ? (size_t)result.data.integer : 0;
-        arena_mem_free(res_mem, NULL);
+        arena_mem_free(res_mem);
       } else {
         consumed = input_enqueue(keys);
       }
@@ -206,19 +293,46 @@ static void tinput_enqueue(TermInput *input, char *buf, size_t size)
   rbuffer_write(input->key_buffer, buf, size);
 }
 
+static void handle_kitty_key_protocol(TermInput *input, TermKeyKey *key)
+{
+  const char *name = map_get(KittyKey, cstr_t)(&kitty_key_map, (KittyKey)key->code.codepoint);
+  if (name) {
+    char buf[64];
+    size_t len = 0;
+    buf[len++] = '<';
+    if (key->modifiers & TERMKEY_KEYMOD_SHIFT) {
+      len += (size_t)snprintf(buf + len, sizeof(buf) - len, "S-");
+    }
+    if (key->modifiers & TERMKEY_KEYMOD_ALT) {
+      len += (size_t)snprintf(buf + len, sizeof(buf) - len, "A-");
+    }
+    if (key->modifiers & TERMKEY_KEYMOD_CTRL) {
+      len += (size_t)snprintf(buf + len, sizeof(buf) - len, "C-");
+    }
+    len += (size_t)snprintf(buf + len, sizeof(buf) - len, "%s>", name);
+    tinput_enqueue(input, buf, len);
+  }
+}
+
 static void forward_simple_utf8(TermInput *input, TermKeyKey *key)
 {
   size_t len = 0;
   char buf[64];
   char *ptr = key->utf8;
 
-  while (*ptr) {
-    if (*ptr == '<') {
-      len += (size_t)snprintf(buf + len, sizeof(buf) - len, "<lt>");
-    } else {
-      buf[len++] = *ptr;
+  if (key->code.codepoint >= 0xE000 && key->code.codepoint <= 0xF8FF
+      && map_has(KittyKey, cstr_t)(&kitty_key_map, (KittyKey)key->code.codepoint)) {
+    handle_kitty_key_protocol(input, key);
+    return;
+  } else {
+    while (*ptr) {
+      if (*ptr == '<') {
+        len += (size_t)snprintf(buf + len, sizeof(buf) - len, "<lt>");
+      } else {
+        buf[len++] = *ptr;
+      }
+      ptr++;
     }
-    ptr++;
   }
 
   tinput_enqueue(input, buf, len);
@@ -236,19 +350,26 @@ static void forward_modified_utf8(TermInput *input, TermKeyKey *key)
     len = termkey_strfkey(input->tk, buf, sizeof(buf), key, TERMKEY_FORMAT_VIM);
   } else {
     assert(key->modifiers);
-    // Termkey doesn't include the S- modifier for ASCII characters (e.g.,
-    // ctrl-shift-l is <C-L> instead of <C-S-L>.  Vim, on the other hand,
-    // treats <C-L> and <C-l> the same, requiring the S- modifier.
-    len = termkey_strfkey(input->tk, buf, sizeof(buf), key, TERMKEY_FORMAT_VIM);
-    if ((key->modifiers & TERMKEY_KEYMOD_CTRL)
-        && !(key->modifiers & TERMKEY_KEYMOD_SHIFT)
-        && ASCII_ISUPPER(key->code.codepoint)) {
-      assert(len <= 62);
-      // Make room for the S-
-      memmove(buf + 3, buf + 1, len - 1);
-      buf[1] = 'S';
-      buf[2] = '-';
-      len += 2;
+    if (key->code.codepoint >= 0xE000 && key->code.codepoint <= 0xF8FF
+        && map_has(KittyKey, cstr_t)(&kitty_key_map,
+                                     (KittyKey)key->code.codepoint)) {
+      handle_kitty_key_protocol(input, key);
+      return;
+    } else {
+      // Termkey doesn't include the S- modifier for ASCII characters (e.g.,
+      // ctrl-shift-l is <C-L> instead of <C-S-L>.  Vim, on the other hand,
+      // treats <C-L> and <C-l> the same, requiring the S- modifier.
+      len = termkey_strfkey(input->tk, buf, sizeof(buf), key, TERMKEY_FORMAT_VIM);
+      if ((key->modifiers & TERMKEY_KEYMOD_CTRL)
+          && !(key->modifiers & TERMKEY_KEYMOD_SHIFT)
+          && ASCII_ISUPPER(key->code.codepoint)) {
+        assert(len <= 62);
+        // Make room for the S-
+        memmove(buf + 3, buf + 1, len - 1);
+        buf[1] = 'S';
+        buf[2] = '-';
+        len += 2;
+      }
     }
   }
 
@@ -273,8 +394,16 @@ static void forward_mouse_event(TermInput *input, TermKeyKey *key)
     button = last_pressed_button;
   }
 
-  if (button == 0 || (ev != TERMKEY_MOUSE_PRESS && ev != TERMKEY_MOUSE_DRAG
-                      && ev != TERMKEY_MOUSE_RELEASE)) {
+  if (ev == TERMKEY_MOUSE_UNKNOWN && !(key->code.mouse[0] & 0x20)) {
+    int code = key->code.mouse[0] & ~0x3c;
+    if (code == 66 || code == 67) {
+      ev = TERMKEY_MOUSE_PRESS;
+      button = code - 60;
+    }
+  }
+
+  if ((button == 0 && ev != TERMKEY_MOUSE_RELEASE)
+      || (ev != TERMKEY_MOUSE_PRESS && ev != TERMKEY_MOUSE_DRAG && ev != TERMKEY_MOUSE_RELEASE)) {
     return;
   }
 
@@ -306,8 +435,11 @@ static void forward_mouse_event(TermInput *input, TermKeyKey *key)
     if (button == 4) {
       len += (size_t)snprintf(buf + len, sizeof(buf) - len, "ScrollWheelUp");
     } else if (button == 5) {
-      len += (size_t)snprintf(buf + len, sizeof(buf) - len,
-                              "ScrollWheelDown");
+      len += (size_t)snprintf(buf + len, sizeof(buf) - len, "ScrollWheelDown");
+    } else if (button == 6) {
+      len += (size_t)snprintf(buf + len, sizeof(buf) - len, "ScrollWheelLeft");
+    } else if (button == 7) {
+      len += (size_t)snprintf(buf + len, sizeof(buf) - len, "ScrollWheelRight");
     } else {
       len += (size_t)snprintf(buf + len, sizeof(buf) - len, "Mouse");
       last_pressed_button = button;
@@ -317,7 +449,8 @@ static void forward_mouse_event(TermInput *input, TermKeyKey *key)
     len += (size_t)snprintf(buf + len, sizeof(buf) - len, "Drag");
     break;
   case TERMKEY_MOUSE_RELEASE:
-    len += (size_t)snprintf(buf + len, sizeof(buf) - len, "Release");
+    len += (size_t)snprintf(buf + len, sizeof(buf) - len, button ? "Release" : "MouseMove");
+    last_pressed_button = 0;
     break;
   case TERMKEY_MOUSE_UNKNOWN:
     abort();
